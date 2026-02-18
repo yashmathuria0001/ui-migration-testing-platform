@@ -17,10 +17,21 @@ public class AgentResponse {
     // Migration comparison fields
     private Boolean preStatus;
     private Boolean postStatus;
+    private Boolean regressionDetected;
+    private String severity;
+    private String explanation;
     private String difference;
     private String preOutput;
     private String postOutput;
 
     private String reportPath;
-     private List<StepResultDTO> results;
+    private String preReportPath;
+    private String postReportPath;
+    private String preRawOutput;
+    private String postRawOutput;
+
+    private List<StepResultDTO> results;
+
+    private Integer riskScore;
+    private Long executionDurationMs;
 }

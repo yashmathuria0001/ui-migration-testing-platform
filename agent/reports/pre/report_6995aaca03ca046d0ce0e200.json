@@ -1,0 +1,165 @@
+{
+  "config": {
+    "configFile": "/Users/yash/Documents/GitHub/ui-migration-testing-platform/agent/playwright.config.js",
+    "rootDir": "/Users/yash/Documents/GitHub/ui-migration-testing-platform/agent/generated_tests",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/yash/Documents/GitHub/ui-migration-testing-platform/agent/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "/Users/yash/Documents/GitHub/ui-migration-testing-platform/agent/generated_tests",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "runAgents": "none",
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.58.2",
+    "workers": 5,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "test_6995aaca03ca046d0ce0e200.spec.js",
+      "file": "test_6995aaca03ca046d0ce0e200.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "AI Generated Test",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "timedOut",
+                  "duration": 30017,
+                  "error": {
+                    "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m",
+                    "stack": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                  },
+                  "errors": [
+                    {
+                      "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                    },
+                    {
+                      "location": {
+                        "file": "/Users/yash/Documents/GitHub/ui-migration-testing-platform/agent/generated_tests/test_6995aaca03ca046d0ce0e200.spec.js",
+                        "column": 16,
+                        "line": 50
+                      },
+                      "message": "Error: page.click: Test timeout of 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a[href*=\"logout\"]')\u001b[22m\n\n\n  48 |\n  49 |   await test.step('6. Click Logout to return to the login page', async () => {\n> 50 |     await page.click('a[href*=\"logout\"]');\n     |                ^\n  51 |     await page.waitForLoadState('networkidle');\n  52 |     const dir = path.join('screenshots', process.env.RUN_LABEL || 'run', process.env.TEST_RUN_ID || 'unknown');\n  53 |     fs.mkdirSync(dir, { recursive: true });\n    at /Users/yash/Documents/GitHub/ui-migration-testing-platform/agent/generated_tests/test_6995aaca03ca046d0ce0e200.spec.js:50:16\n    at /Users/yash/Documents/GitHub/ui-migration-testing-platform/agent/generated_tests/test_6995aaca03ca046d0ce0e200.spec.js:49:14"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "steps": [
+                    {
+                      "title": "1. Open the login page",
+                      "duration": 3539
+                    },
+                    {
+                      "title": "2. Enter username tomsmith into the Username field",
+                      "duration": 48
+                    },
+                    {
+                      "title": "3. Enter password SuperSecretPassword! into the Password field",
+                      "duration": 50
+                    },
+                    {
+                      "title": "4. Click the Login button",
+                      "duration": 1017
+                    },
+                    {
+                      "title": "5. Verify that the secure area is shown after successful login",
+                      "duration": 33
+                    },
+                    {
+                      "title": "6. Click Logout to return to the login page",
+                      "duration": 25013,
+                      "error": {
+                        "message": "Error: page.click: Test timeout of 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a[href*=\"logout\"]')\u001b[22m\n",
+                        "stack": "Error: page.click: Test timeout of 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a[href*=\"logout\"]')\u001b[22m\n\n    at /Users/yash/Documents/GitHub/ui-migration-testing-platform/agent/generated_tests/test_6995aaca03ca046d0ce0e200.spec.js:50:16\n    at /Users/yash/Documents/GitHub/ui-migration-testing-platform/agent/generated_tests/test_6995aaca03ca046d0ce0e200.spec.js:49:14",
+                        "location": {
+                          "file": "/Users/yash/Documents/GitHub/ui-migration-testing-platform/agent/generated_tests/test_6995aaca03ca046d0ce0e200.spec.js",
+                          "column": 16,
+                          "line": 50
+                        },
+                        "snippet": "  48 |\n  49 |   await test.step('6. Click Logout to return to the login page', async () => {\n> 50 |     await page.click('a[href*=\"logout\"]');\n     |                ^\n  51 |     await page.waitForLoadState('networkidle');\n  52 |     const dir = path.join('screenshots', process.env.RUN_LABEL || 'run', process.env.TEST_RUN_ID || 'unknown');\n  53 |     fs.mkdirSync(dir, { recursive: true });"
+                      }
+                    }
+                  ],
+                  "startTime": "2026-02-18T12:04:30.473Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/Users/yash/Documents/GitHub/ui-migration-testing-platform/agent/test-results/test_6995aaca03ca046d0ce0e200-AI-Generated-Test/error-context.md"
+                    }
+                  ]
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "44a989193ddde996e30d-b3c10475f5be0861e200",
+          "file": "test_6995aaca03ca046d0ce0e200.spec.js",
+          "line": 5,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-02-18T12:04:29.981Z",
+    "duration": 31085.56,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

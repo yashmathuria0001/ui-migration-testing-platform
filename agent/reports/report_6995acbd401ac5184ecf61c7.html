@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>UI Migration Report 6995acbd401ac5184ecf61c7</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; color: #111827; }
+    .muted { color: #6b7280; }
+    .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #e5e7eb; padding: 10px; text-align: left; vertical-align: top; }
+    th { background: #f9fafb; }
+  </style>
+</head>
+<body>
+  <h1>UI Migration Report</h1>
+  <p class="muted">Test run: 6995acbd401ac5184ecf61c7</p>
+  <div class="card">
+    <div><strong>Pre URL:</strong> https://the-internet.herokuapp.com/login</div>
+    <div><strong>Post URL:</strong> https://the-internet.herokuapp.com/login</div>
+  </div>
+  <div class="card">
+    <h2 style="margin-top:0;">AI Summary</h2>
+    <div><strong>Severity:</strong> LOW</div>
+    <div style="margin-top:8px;">No changes in test results detected between PRE and POST execution summaries.</div>
+  </div>
+  <div class="card">
+    <h2 style="margin-top:0;">Steps</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Step</th><th>Pre</th><th>Post</th><th>Note</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>1. Open the login page</td><td>PASS</td><td>PASS</td><td>Test failed with the same error in both PRE and POST executions.</td></tr><tr><td>2</td><td>2. Enter username tomsmith into the Username field</td><td>PASS</td><td>PASS</td><td></td></tr><tr><td>3</td><td>3. Enter password SuperSecretPassword! into the Password field</td><td>PASS</td><td>PASS</td><td></td></tr><tr><td>4</td><td>4. Click the Login button</td><td>PASS</td><td>PASS</td><td></td></tr><tr><td>5</td><td>5. Verify that the secure area is shown after successful login</td><td>FAIL</td><td>FAIL</td><td></td></tr><tr><td>6</td><td>6. Click Logout to return to the login page</td><td>SKIPPED</td><td>SKIPPED</td><td></td></tr><tr><td>7</td><td>7. Enter username tomsmith and an incorrect password</td><td>SKIPPED</td><td>SKIPPED</td><td></td></tr><tr><td>8</td><td>8. Click the Login button again</td><td>SKIPPED</td><td>SKIPPED</td><td></td></tr><tr><td>9</td><td>9. Verify that an error message is shown for invalid credentials</td><td>SKIPPED</td><td>SKIPPED</td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>

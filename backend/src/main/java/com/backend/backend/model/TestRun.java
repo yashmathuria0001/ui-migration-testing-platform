@@ -35,4 +35,19 @@ public class TestRun {
 
     // 🔥 Embedded Mongo document
     private List<StepResult> results;
+
+    // AI Regression Intelligence
+    private Boolean regressionDetected;
+    private String severity;
+    private String aiExplanation;
+    private Boolean preStatus;
+    private Boolean postStatus;
+    private String preReportPath;
+    private String postReportPath;
+    private String preRawOutput;
+    private String postRawOutput;
+
+    // Risk & Execution Metrics
+    private Integer riskScore;
+    private Long executionDurationMs;
 }

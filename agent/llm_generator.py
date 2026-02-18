@@ -36,14 +36,36 @@ STRICT RULES:
 - DO NOT wrap in backticks.
 - DO NOT add explanations.
 - Output must be directly executable by Playwright.
+- Use the environment variables:
+  - BASE_URL (already set by the runner)
+  - TEST_RUN_ID (string)
+  - RUN_LABEL (either "pre" or "post")
 
 REQUIRED STRUCTURE:
 
 import {{ test, expect }} from '@playwright/test';
+import fs from 'fs';
+import path from 'path';
 
 test('AI Generated Test', async ({{ page }}) => {{
 
-    // Steps here
+    // IMPORTANT:
+    // - Each input step MUST be wrapped in `await test.step(...)`
+    // - After EACH step, take a full-page screenshot saved to:
+    //   screenshots/<RUN_LABEL>/<TEST_RUN_ID>/step_<N>.png  (N starts at 1)
+    // - At the start of the test, take an initial screenshot:
+    //   await page.screenshot({{ path: `screenshots/${{process.env.ENV_TYPE || 'RUN'}}_${{Date.now()}}.png`, fullPage: true }});
+    // - Ensure the directory exists before writing screenshots.
+    // - ENV_TYPE is either "PRE" or "POST".
+    //
+    // Example:
+    // await test.step('1. Open login page', async () => {{
+    //   await page.goto(process.env.BASE_URL);
+    //   await page.waitForLoadState('networkidle');
+    //   const dir = path.join('screenshots', process.env.RUN_LABEL || 'run', process.env.TEST_RUN_ID || 'unknown');
+    //   fs.mkdirSync(dir, {{ recursive: true }});
+    //   await page.screenshot({{ path: path.join(dir, 'step_1.png'), fullPage: true }});
+    // }});
 
 }});
 

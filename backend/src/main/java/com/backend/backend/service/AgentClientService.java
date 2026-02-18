@@ -20,9 +20,23 @@ public class AgentClientService {
     private final RestTemplate restTemplate;
     private final TestRunService testRunService;
 
-    private static final String AGENT_URL = "http://localhost:5000/generate-script";
+    private static final String AGENT_BASE = "http://localhost:5000";
+    private static final String AGENT_URL = AGENT_BASE + "/generate-script";
+    private static final String AGENT_HEALTH_URL = AGENT_BASE + "/health";
 
     public AgentResponse executeAgent(TestRun run) {
+
+        // Task 15: Ping agent health before execution
+        try {
+            ResponseEntity<String> healthRes = restTemplate.getForEntity(AGENT_HEALTH_URL, String.class);
+            if (healthRes.getStatusCode().isError() || !(healthRes.getBody() != null && healthRes.getBody().contains("UP"))) {
+                testRunService.markAsFailed(run.getId(), "Agent health check failed");
+                return null;
+            }
+        } catch (Exception e) {
+            testRunService.markAsFailed(run.getId(), "Agent unreachable: " + e.getMessage());
+            throw new RuntimeException("Agent health check failed", e);
+        }
 
         // 1️⃣ Mark as RUNNING
         testRunService.markAsRunning(run.getId());
@@ -54,28 +68,34 @@ public class AgentClientService {
                 return null;
             }
 
-            // ✅ SUCCESS
-            if ("SUCCESS".equals(agentResponse.getStatus())) {
+            // Store results: when we have results (even with regression), use markAsCompleted to store all AI intelligence
+            if (agentResponse.getResults() != null) {
 
-                // 🔥 Convert DTO → Model
-                List<StepResult> stepResults = null;
-
-                if (agentResponse.getResults() != null) {
-                    stepResults = agentResponse.getResults()
-                            .stream()
-                            .map(this::mapToModel)
-                            .collect(Collectors.toList());
-                }
+                List<StepResult> stepResults = agentResponse.getResults()
+                        .stream()
+                        .map(this::mapToModel)
+                        .collect(Collectors.toList());
 
                 testRunService.markAsCompleted(
                         run.getId(),
                         stepResults,
-                        null   // report path can be added later
+                        agentResponse.getReportPath(),
+                        agentResponse.getPreStatus(),
+                        agentResponse.getPostStatus(),
+                        agentResponse.getRegressionDetected(),
+                        agentResponse.getSeverity(),
+                        agentResponse.getExplanation(),
+                        agentResponse.getPreReportPath(),
+                        agentResponse.getPostReportPath(),
+                        agentResponse.getPreRawOutput(),
+                        agentResponse.getPostRawOutput(),
+                        agentResponse.getRiskScore(),
+                        agentResponse.getExecutionDurationMs()
                 );
 
             } else {
 
-                // ❌ FAILED
+                // Execution crashed (no results)
                 testRunService.markAsFailed(
                         run.getId(),
                         agentResponse.getExecutionError() != null

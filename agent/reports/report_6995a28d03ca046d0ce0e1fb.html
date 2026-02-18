@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>UI Migration Report 6995a28d03ca046d0ce0e1fb</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; color: #111827; }
+    .muted { color: #6b7280; }
+    .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #e5e7eb; padding: 10px; text-align: left; vertical-align: top; }
+    th { background: #f9fafb; }
+  </style>
+</head>
+<body>
+  <h1>UI Migration Report</h1>
+  <p class="muted">Test run: 6995a28d03ca046d0ce0e1fb</p>
+  <div class="card">
+    <div><strong>Pre URL:</strong> https://old-ui.example.com</div>
+    <div><strong>Post URL:</strong> https://new-ui.example.com</div>
+  </div>
+  <div class="card">
+    <h2 style="margin-top:0;">AI Summary</h2>
+    <div><strong>Severity:</strong> HIGH</div>
+    <div style="margin-top:8px;">The test failed in both PRE and POST reports with a 'net::ERR_NAME_NOT_RESOLVED' error, indicating a potential issue with the BASE_URL environment variable or the website's DNS resolution.</div>
+  </div>
+  <div class="card">
+    <h2 style="margin-top:0;">Steps</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Step</th><th>Pre</th><th>Post</th><th>Note</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>1. Open the home page</td><td>FAIL</td><td>FAIL</td><td></td></tr><tr><td>2</td><td>2. Click on the Login button in the header</td><td>SKIPPED</td><td>SKIPPED</td><td></td></tr><tr><td>3</td><td>3. Enter valid username and password and submit</td><td>SKIPPED</td><td>SKIPPED</td><td></td></tr><tr><td>4</td><td>4. Verify that the dashboard page is visible</td><td>SKIPPED</td><td>SKIPPED</td><td></td></tr><tr><td>5</td><td>5. Open the user profile menu and check that the user name is correct</td><td>SKIPPED</td><td>SKIPPED</td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>

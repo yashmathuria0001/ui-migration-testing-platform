@@ -16,15 +16,13 @@ public class ExcelParserService {
 
     private final TestRunService testRunService;
 
-    public TestRun parseAndCreateTestRun(MultipartFile file) {
+    public TestRun parseAndCreateTestRun(MultipartFile file, String preMigrationUrl, String postMigrationUrl) {
 
         try (InputStream inputStream = file.getInputStream();
              Workbook workbook = WorkbookFactory.create(inputStream)) {
 
             Sheet sheet = workbook.getSheetAt(0);
 
-            String preUrl = null;
-            String postUrl = null;
             List<String> steps = new ArrayList<>();
 
             DataFormatter formatter = new DataFormatter();
@@ -33,15 +31,7 @@ public class ExcelParserService {
 
                 if (row.getRowNum() == 0) continue; // skip header row
 
-                if (preUrl == null) {
-                    preUrl = formatter.formatCellValue(row.getCell(0));
-                }
-
-                if (postUrl == null) {
-                    postUrl = formatter.formatCellValue(row.getCell(1));
-                }
-
-                String step = formatter.formatCellValue(row.getCell(2));
+                String step = formatter.formatCellValue(row.getCell(0));
 
                 if (step != null && !step.isBlank()) {
                     steps.add(step);
@@ -49,8 +39,8 @@ public class ExcelParserService {
             }
 
             TestRun testRun = new TestRun();
-            testRun.setPreMigrationUrl(preUrl);
-            testRun.setPostMigrationUrl(postUrl);
+            testRun.setPreMigrationUrl(preMigrationUrl);
+            testRun.setPostMigrationUrl(postMigrationUrl);
             testRun.setSteps(steps);
 
             return testRunService.createTestRun(testRun);
