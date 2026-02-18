@@ -49,22 +49,35 @@ test('AI Generated Test', async ({{ page }}) => {{
 
 LOGIC RULES:
 
-1. If step contains full URL:
-   await page.goto('URL');
+1. NEVER hardcode full URLs.
+
+2. If step contains full URL:
+   Extract only the pathname.
+   Example:
+   https://example.com/login
+   → use:
+
+   await page.goto(process.env.BASE_URL);
    await page.waitForLoadState('networkidle');
 
-2. Enter username X:
+3. If step says "Open login page" without URL:
+   Use:
+   await page.goto(process.env.BASE_URL);
+   await page.waitForLoadState('networkidle');
+
+4. Enter username X:
    await page.fill('input[name="username"]', 'X');
 
-3. Enter password Y:
+5. Enter password Y:
    await page.fill('input[name="password"]', 'Y');
 
-4. Click login button:
+6. Click login button:
    await page.click('button[type="submit"]');
    await page.waitForLoadState('networkidle');
 
-5. Always add final assertion:
+7. Always add final assertion:
    await expect(page).toHaveURL(/.*/);
+
 """
 
     response = client.chat.completions.create(
