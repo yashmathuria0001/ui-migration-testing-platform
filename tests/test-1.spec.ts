@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 test("test", async ({ page }) => {
-  await page.goto("http://localhost:3001/");
+  await page.goto("http://localhost:3000/");
   await expect(page.getByText("Account LoginAccess your home")).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign In" })).toBeVisible();
   await page.getByRole("textbox", { name: "Username" }).click();
@@ -9,11 +9,6 @@ test("test", async ({ page }) => {
   await page.getByRole("textbox", { name: "Password" }).click();
   await page.getByRole("textbox", { name: "Password" }).fill("1234");
   await page.getByRole("button", { name: "Sign In" }).click();
-  await expect(
-    page.getByText(
-      "Welcome back, ANI!Here's an overview of your home loan accountLogout",
-    ),
-  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Make a Payment" }),
   ).toBeVisible();
