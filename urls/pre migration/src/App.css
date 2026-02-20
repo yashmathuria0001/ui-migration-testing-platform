@@ -1,0 +1,27 @@
+.banner {
+  background-color: #d71e28;
+  color: white;
+  padding: 40px 40px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.branding {
+  background-color: white;
+  padding: 20px 20px 15px 20px;
+  text-align: center;
+  border-bottom: 3px solid #ffcd41;
+}
+
+.branding h1 {
+  font-size: 32px;
+  font-weight: 700;
+  margin: 0;
+  color: #d71e28;
+}
+
+.branding p {
+  font-size: 15px;
+  margin: 8px 0 0 0;
+  color: #666;
+}

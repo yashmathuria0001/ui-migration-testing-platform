@@ -1,0 +1,25 @@
+{
+  "name": "ui-migration-testing-platform",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yashmathuria0001/ui-migration-testing-platform.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/yashmathuria0001/ui-migration-testing-platform/issues"
+  },
+  "homepage": "https://github.com/yashmathuria0001/ui-migration-testing-platform#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^25.3.0"
+  }
+}
