@@ -1,1 +1,34 @@
 .env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+.DS_Store
+
+# Python virtual envs and tooling caches
+venv/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node dependencies and test outputs
+node_modules/
+test-results/
+playwright-report/
+
+# Generated Playwright specs
+generated_tests/*.spec.js
+generated_tests/screenshots/
+
+# Generated execution artifacts
+reports/**/*.json
+reports/**/*.html
+reports/runtime/**/*.json
+screenshots/**/*.png
+
+# Keep directory placeholders in git
+!generated_tests/.gitkeep
+!reports/.gitkeep
+!screenshots/.gitkeep

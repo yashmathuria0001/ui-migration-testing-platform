@@ -1,15 +1,11 @@
 {
-  "name": "agent",
+  "name": "ui-migration-agent",
   "version": "1.0.0",
-  "description": "",
-  "main": "playwright.config.js",
+  "private": true,
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "playwright:test": "playwright test"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "@playwright/test": "^1.58.2"
   }

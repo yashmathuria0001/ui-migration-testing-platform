@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import {
   Activity,
@@ -46,7 +46,7 @@ export default function Dashboard() {
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
 
-  const fetchRuns = async () => {
+  const fetchRuns = useCallback(async () => {
     setLoading(true);
     try {
       const [runsRes, statsRes] = await Promise.all([
@@ -71,15 +71,26 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page]);
 
   useEffect(() => {
     fetchRuns();
-  }, [page]);
+  }, [fetchRuns]);
 
   const failedTests = (run) => {
     const results = run?.results || [];
-    return results.filter((r) => r.postStatus === 'FAIL' || r.preStatus === 'FAIL');
+    return results.filter((r) => {
+      const comparison = String(r.comparisonStatus || '').toUpperCase();
+      if (comparison === 'FAIL') return true;
+      return r.postStatus !== r.preStatus;
+    });
+  };
+
+  const getRunComparisonStatus = (run) => {
+    if ((run?.status || '').toUpperCase() === 'FAILED') return 'FAILED';
+    if (run?.regressionDetected === true) return 'FAIL';
+    if ((run?.status || '').toUpperCase() === 'COMPLETED') return 'PASS';
+    return run?.status || 'UNKNOWN';
   };
 
   const formatDate = (d) => {
@@ -151,9 +162,14 @@ export default function Dashboard() {
                   >
                     <td className="id-cell">{run.id?.slice(0, 8) || '—'}...</td>
                     <td>
-                      <span className={`status-badge ${(run.status || '').toLowerCase()}`}>
-                        {run.status || '—'}
-                      </span>
+                      {(() => {
+                        const comparisonStatus = getRunComparisonStatus(run);
+                        return (
+                          <span className={`status-badge ${comparisonStatus.toLowerCase()}`}>
+                            {comparisonStatus}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td>
                       <SeverityBadge severity={run.severity} />
@@ -210,14 +226,10 @@ export default function Dashboard() {
               </section>
 
               <section className="drawer-section">
-                <h4>Pre vs Post Status</h4>
+                <h4>Comparison Status</h4>
                 <div className="pre-post-status">
-                  <span className={selectedRun.preStatus ? 'pass' : 'fail'}>
-                    Pre: {selectedRun.preStatus ? 'PASS' : 'FAIL'}
-                  </span>
-                  <span className="separator">→</span>
-                  <span className={selectedRun.postStatus ? 'pass' : 'fail'}>
-                    Post: {selectedRun.postStatus ? 'PASS' : 'FAIL'}
+                  <span className={getRunComparisonStatus(selectedRun) === 'PASS' ? 'pass' : 'fail'}>
+                    Result: {getRunComparisonStatus(selectedRun)}
                   </span>
                 </div>
               </section>
@@ -228,7 +240,7 @@ export default function Dashboard() {
                   <ul className="failed-tests-list">
                     {failedTests(selectedRun).map((r, i) => (
                       <li key={i}>
-                        <strong>{r.stepName}</strong> — Pre: {r.preStatus}, Post: {r.postStatus}
+                        <strong>{r.stepName}</strong> — Comparison: {r.comparisonStatus || (r.preStatus === r.postStatus ? 'PASS' : 'FAIL')}
                         {r.difference && <div className="diff">{r.difference}</div>}
                       </li>
                     ))}

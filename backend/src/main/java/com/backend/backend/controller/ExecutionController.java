@@ -73,55 +73,61 @@ public class ExecutionController {
     @PostMapping("/{id}/run")
     public TestRun runFullExecution(@PathVariable String id) {
 
-        // 1️⃣ Mark RUNNING
-        testRunService.markAsRunning(id);
+        try {
+            // 1️⃣ Mark RUNNING
+            testRunService.markAsRunning(id);
 
-        // 2️⃣ Get TestRun
-        TestRun run = testRunService.getById(id);
+            // 2️⃣ Get TestRun
+            TestRun run = testRunService.getById(id);
 
-        // 3️⃣ Call Agent
-        AgentResponse response = agentClientService.executeAgent(run);
+            // 3️⃣ Call Agent
+            AgentResponse response = agentClientService.executeAgent(run);
 
-        // 4️⃣ Update DB based on result
-        if ("SUCCESS".equals(response.getStatus())) {
+            // 4️⃣ Update DB based on result
+            if ("SUCCESS".equals(response.getStatus())) {
 
-            List<StepResult> stepResults = null;
-            if (response.getResults() != null) {
-                stepResults = response.getResults().stream()
-                        .map(dto -> StepResult.builder()
-                                .stepName(dto.getStepName())
-                                .preStatus(dto.getPreStatus())
-                                .postStatus(dto.getPostStatus())
-                                .difference(dto.getDifference())
-                                .preScreenshotPath(dto.getPreScreenshotPath())
-                                .postScreenshotPath(dto.getPostScreenshotPath())
-                                .build())
-                        .collect(Collectors.toList());
+                List<StepResult> stepResults = null;
+                if (response.getResults() != null) {
+                    stepResults = response.getResults().stream()
+                            .map(dto -> StepResult.builder()
+                                    .stepName(dto.getStepName())
+                                    .preStatus(dto.getPreStatus())
+                                    .postStatus(dto.getPostStatus())
+                                    .comparisonStatus(dto.getComparisonStatus())
+                                    .difference(dto.getDifference())
+                                    .preScreenshotPath(dto.getPreScreenshotPath())
+                                    .postScreenshotPath(dto.getPostScreenshotPath())
+                                    .build())
+                            .collect(Collectors.toList());
+                }
+
+                return testRunService.markAsCompleted(
+                        id,
+                        stepResults,
+                        response.getReportPath(),
+                        response.getPreStatus(),
+                        response.getPostStatus(),
+                        response.getRegressionDetected(),
+                        response.getSeverity(),
+                        response.getExplanation(),
+                        response.getPreReportPath(),
+                        response.getPostReportPath(),
+                        response.getPreRawOutput(),
+                        response.getPostRawOutput(),
+                        response.getRiskScore(),
+                        response.getExecutionDurationMs()
+                );
+
+            } else {
+
+                return testRunService.markAsFailed(
+                        id,
+                        response.getExecutionError()
+                );
             }
 
-            return testRunService.markAsCompleted(
-                    id,
-                    stepResults,
-                    response.getReportPath(),
-                    response.getPreStatus(),
-                    response.getPostStatus(),
-                    response.getRegressionDetected(),
-                    response.getSeverity(),
-                    response.getExplanation(),
-                    response.getPreReportPath(),
-                    response.getPostReportPath(),
-                    response.getPreRawOutput(),
-                    response.getPostRawOutput(),
-                    response.getRiskScore(),
-                    response.getExecutionDurationMs()
-            );
-
-        } else {
-
-            return testRunService.markAsFailed(
-                    id,
-                    response.getExecutionError()
-            );
+        } catch (Exception e) {
+            return testRunService.markAsFailed(id, e.getMessage());
         }
     }
 }

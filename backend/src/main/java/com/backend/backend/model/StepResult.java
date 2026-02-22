@@ -12,6 +12,7 @@ public class StepResult {
 
     private String preStatus;   // PASS / FAIL
     private String postStatus;  // PASS / FAIL
+    private String comparisonStatus; // PASS / FAIL based on PRE vs POST comparison
 
     private String difference;  // AI comment if mismatch
 

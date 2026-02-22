@@ -9,7 +9,7 @@ import java.util.List;
 public class AgentRequest {
 
     private String testRunId;
-    private String preUrl;
-    private String postUrl;
+    private String preMigrationUrl;
+    private String postMigrationUrl;
     private List<String> steps;
 }

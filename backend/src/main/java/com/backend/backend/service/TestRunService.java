@@ -25,7 +25,7 @@ public class TestRunService {
         java.util.List<TestRun> all = repository.findAll();
         long total = all.size();
         long passed = all.stream().filter(r -> "COMPLETED".equals(r.getStatus()) && Boolean.FALSE.equals(r.getRegressionDetected())).count();
-        long failed = all.stream().filter(r -> "FAILED".equals(r.getStatus())).count();
+        long failed = all.stream().filter(r -> "FAILED".equals(r.getStatus()) || Boolean.TRUE.equals(r.getRegressionDetected())).count();
         long regressions = all.stream().filter(r -> Boolean.TRUE.equals(r.getRegressionDetected())).count();
         long highSeverity = all.stream().filter(r -> "HIGH".equals(r.getSeverity())).count();
         return java.util.Map.of(
@@ -77,6 +77,7 @@ public class TestRunService {
 
         run.setStatus("COMPLETED");
         run.setExecutionEndTime(LocalDateTime.now());
+        run.setErrorMessage(null);
         if (results != null) {
             run.setResults(results);
         }
