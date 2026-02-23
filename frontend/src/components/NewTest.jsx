@@ -19,11 +19,11 @@ const AGENT_ASSET_BASE_URL = import.meta.env.VITE_AGENT_ASSET_BASE_URL || 'http:
 const api = axios.create({ baseURL: `${BACKEND_BASE_URL}/api` });
 
 const STAGE_DEFS = [
-  { id: 'prepare', label: 'Test Input Setup', detail: 'Uploading/creating test case from JSON or Excel.' },
-  { id: 'script', label: 'Script Generation', detail: 'Generating Playwright automation script from steps.' },
-  { id: 'playwright', label: 'Playwright Execution', detail: 'Running PRE and POST UI flows and capturing screenshots.' },
-  { id: 'analysis', label: 'AI Comparison', detail: 'Comparing PRE vs POST and calculating risk/severity.' },
-  { id: 'report', label: 'Final Report', detail: 'Building step-wise result summary and completion payload.' },
+  { id: 'prepare', label: 'Preparing Test', detail: 'Reading your uploaded test case and validating input.' },
+  { id: 'script', label: 'Building Flow', detail: 'Preparing step execution flow for both versions.' },
+  { id: 'playwright', label: 'Running Checks', detail: 'Running all steps on old and new screens with snapshots.' },
+  { id: 'analysis', label: 'Comparing Results', detail: 'Checking whether both versions behave the same for each step.' },
+  { id: 'report', label: 'Publishing Report', detail: 'Preparing final comparison summary with suggestions.' },
 ];
 
 const initialStages = () =>
@@ -33,6 +33,134 @@ function normalizeRunStatus(status) {
   const s = String(status || '').toUpperCase();
   if (!s) return 'UNKNOWN';
   return s;
+}
+
+function buildOverallSummary(report, summary) {
+  const severity = String(report?.severity || 'LOW').toUpperCase();
+  const score = Number(report?.riskScore ?? 0);
+  const mismatch = Number(summary?.mismatch ?? 0);
+  const total = Number(summary?.total ?? 0);
+  const base = String(report?.aiExplanation || '').trim();
+
+  if (report?.status === 'FAILED') {
+    return {
+      headline: 'Run could not be completed',
+      description:
+        'The full comparison did not finish. Please run the test again so a complete side-by-side result can be generated.',
+      testerGuidance:
+        'Check that both URLs are reachable, then rerun this case to produce a full summary and recommendations.',
+    };
+  }
+
+  if (mismatch === 0) {
+    return {
+      headline: 'Migration behavior looks consistent',
+      description:
+        base || 'All compared steps behaved the same before and after the update.',
+      testerGuidance:
+        `No differences were found across ${total} checked step(s). You can proceed with confidence and keep this report as release evidence.`,
+    };
+  }
+
+  return {
+    headline: `${mismatch} difference(s) need review`,
+    description:
+      base ||
+      `Some steps behaved differently after the update. This may impact user trust if left unresolved.`,
+    testerGuidance:
+      `Priority: ${severity} (score ${score}/100). Review each highlighted step below, apply the suggested fix, and rerun this test to confirm alignment.`,
+  };
+}
+
+function buildDetailedTopAnalysis(report, summary) {
+  const results = Array.isArray(report?.results) ? report.results : [];
+  const mismatchSteps = results.filter((row) => {
+    const status = String(row.comparisonStatus || '').toUpperCase();
+    if (status === 'FAIL') return true;
+    if (status === 'PASS') return false;
+    return row.preStatus !== row.postStatus;
+  });
+  const matchedCount = Math.max(0, (summary?.total || 0) - (summary?.mismatch || 0));
+  const severity = String(report?.severity || 'LOW').toUpperCase();
+  const confidence = Number(report?.riskScore ?? 0);
+
+  const observations = [];
+  observations.push(
+    `${matchedCount} of ${summary?.total || 0} step(s) behaved the same before and after the update.`
+  );
+  if ((summary?.mismatch || 0) > 0) {
+    observations.push(
+      `${summary?.mismatch || 0} step(s) showed a visible or behavioral difference and require review.`
+    );
+    const names = mismatchSteps.map((s) => s.stepName).filter(Boolean).slice(0, 3);
+    if (names.length > 0) {
+      observations.push(`Main differences were found in: ${names.join(', ')}.`);
+    }
+  } else {
+    observations.push('No meaningful differences were detected in this run.');
+  }
+
+  const impact =
+    (summary?.mismatch || 0) === 0
+      ? 'User experience is currently stable across both versions for the steps tested.'
+      : severity === 'HIGH'
+        ? 'These differences can create user confusion or block important tasks, so they should be fixed before release.'
+        : 'These differences may reduce consistency and trust, so they should be addressed in the next update cycle.';
+
+  const nextActions = [];
+  if ((summary?.mismatch || 0) > 0) {
+    nextActions.push('Review each failed step below and apply the suggested fix.');
+    nextActions.push('Re-run this same test case after fixes to confirm behavior is aligned.');
+    nextActions.push('Prioritize steps that affect primary user actions first.');
+  } else {
+    nextActions.push('Keep this report as validation evidence for migration sign-off.');
+    nextActions.push('Run the same case again after any future UI changes.');
+  }
+
+  return {
+    severity,
+    confidence,
+    observations,
+    impact,
+    nextActions,
+  };
+}
+
+function parseStepAnalysis(rawText, isPass) {
+  const cleaned = String(rawText || '')
+    .replace(/\s+/g, ' ')
+    .replace(/Pre issue:\s*none\.\s*Post issue:\s*none\./gi, '')
+    .replace(/Pre issue:/gi, 'Before update:')
+    .replace(/Post issue:/gi, 'After update:')
+    .replace(/this step is not fully aligned between pre and post migration/gi, 'this step behaves differently after the update')
+    .replace(/user outcome is consistent across both versions/gi, 'users see the same result in both versions')
+    .trim();
+  if (!cleaned) {
+    return {
+      description: isPass
+        ? 'This step behaved the same before and after the update.'
+        : 'This step behaved differently after the update and should be reviewed.',
+      fix: isPass
+        ? ''
+        : 'Align this step in the updated version so users see the same outcome as before.',
+    };
+  }
+
+  const splitToken = 'Suggested fix:';
+  if (cleaned.includes(splitToken)) {
+    const [desc, ...fixParts] = cleaned.split(splitToken);
+    return {
+      description: desc.trim(),
+      fix: fixParts.join(splitToken).trim(),
+    };
+  }
+
+  return {
+    description: cleaned,
+    fix: isPass
+      ? ''
+      : 'Align this step in the updated version so users see the same outcome as before.',
+  };
 }
 
 export default function NewTest() {
@@ -46,7 +174,6 @@ export default function NewTest() {
   const [error, setError] = useState(null);
   const [stages, setStages] = useState(initialStages);
   const [backendStatus, setBackendStatus] = useState('IDLE');
-  const [currentRunId, setCurrentRunId] = useState(null);
 
   const stageIntervalRef = useRef(null);
 
@@ -139,12 +266,26 @@ export default function NewTest() {
       pass: report?.status === 'COMPLETED' && mismatch.length === 0,
       label:
         report?.status === 'FAILED'
-          ? 'Execution failed'
+          ? 'Execution could not be completed'
           : mismatch.length > 0
-            ? `${mismatch.length} step(s) changed after migration`
-            : 'No regression detected in compared steps',
+            ? `${mismatch.length} step(s) show a difference`
+            : 'No user-facing differences detected',
     };
   }, [report]);
+  const overallSummary = useMemo(() => buildOverallSummary(report, summary), [report, summary]);
+  const detailedTopAnalysis = useMemo(
+    () => buildDetailedTopAnalysis(report, summary),
+    [report, summary],
+  );
+
+  const getFriendlyRunStatus = (status) => {
+    const normalized = String(status || '').toUpperCase();
+    if (normalized === 'RUNNING') return 'In Progress';
+    if (normalized === 'COMPLETED') return 'Completed';
+    if (normalized === 'FAILED') return 'Stopped';
+    if (normalized === 'IDLE') return 'Not Started';
+    return 'In Progress';
+  };
 
   const resolveAgentAssetUrl = (maybePath) => {
     if (!maybePath) return null;
@@ -173,7 +314,6 @@ export default function NewTest() {
     setError(null);
     setReport(null);
     setBackendStatus('RUNNING');
-    setCurrentRunId(null);
     setStages(initialStages());
     setStageChainProgress(0);
 
@@ -199,8 +339,7 @@ export default function NewTest() {
         testRunId = createRes.data.id;
       }
 
-      setCurrentRunId(testRunId);
-      setStageStatus(0, 'done', `Prepared test run: ${testRunId}`);
+      setStageStatus(0, 'done', 'Test scenario prepared successfully.');
       setStageStatus(1, 'active');
       startAutoStageProgress();
 
@@ -218,7 +357,7 @@ export default function NewTest() {
             status: 'done',
             note:
               idx === 4
-                ? `Completed in ${finalReport.executionDurationMs || 0} ms`
+                ? 'Execution completed. Review the final comparison below.'
                 : stage.note,
           }))
         );
@@ -250,8 +389,8 @@ export default function NewTest() {
       <section className="hero-banner">
         <div className="hero-top-bar" />
         <div className="hero-content">
-          <h2>Migration Test Orchestrator</h2>
-          <p>Run UI migration tests from Excel or JSON, track execution stages, and inspect visual + AI step comparison.</p>
+          <h2>SmartParity Test Studio</h2>
+          <p>Run migration checks from Excel or JSON, follow simple execution stages, and review human-friendly comparison insights.</p>
         </div>
       </section>
 
@@ -339,8 +478,7 @@ export default function NewTest() {
 
         <section className="panel card soft">
           <h3>Execution Stages</h3>
-          <div className="status-chip">Backend status: {backendStatus}</div>
-          {currentRunId && <p className="muted">Run ID: {currentRunId}</p>}
+          <div className="status-chip">Status: {getFriendlyRunStatus(backendStatus)}</div>
 
           <div className="stage-list">
             {stages.map((stage) => (
@@ -378,11 +516,46 @@ export default function NewTest() {
             </div>
           </div>
 
+          <section className="overall-analysis">
+            <h4>Overall Analysis</h4>
+            <p className="overall-headline">{overallSummary.headline}</p>
+            <p>{overallSummary.description}</p>
+            <p className="tester-guidance">
+              <strong>Tester Guidance:</strong> {overallSummary.testerGuidance}
+            </p>
+            <div className="overall-grid">
+              <div className="overall-block">
+                <h5>Key Observations</h5>
+                <ul>
+                  {detailedTopAnalysis.observations.map((item, idx) => (
+                    <li key={`obs-${idx}`}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="overall-block">
+                <h5>User Impact</h5>
+                <p>{detailedTopAnalysis.impact}</p>
+              </div>
+            </div>
+            <div className="overall-foot">
+              <span>Impact Level: {detailedTopAnalysis.severity}</span>
+              <span>Confidence Score: {detailedTopAnalysis.confidence}/100</span>
+            </div>
+            <div className="overall-block">
+              <h5>Recommended Next Actions</h5>
+              <ol>
+                {detailedTopAnalysis.nextActions.map((item, idx) => (
+                  <li key={`next-${idx}`}>{item}</li>
+                ))}
+              </ol>
+            </div>
+          </section>
+
           <div className="report-meta">
             <span>Total Steps: {summary.total}</span>
-            <span>Mismatched: {summary.mismatch}</span>
-            <span>Severity: {report.severity || 'LOW'}</span>
-            <span>Risk: {report.riskScore ?? 0}</span>
+            <span>Differences Found: {summary.mismatch}</span>
+            <span>Impact Level: {report.severity || 'LOW'}</span>
+            <span>Confidence Score: {report.riskScore ?? 0}</span>
           </div>
 
           {report?.combinedReportPath && (
@@ -393,14 +566,13 @@ export default function NewTest() {
 
           <div className="step-report-grid">
             {(report.results || []).map((result, index) => {
-              const aiNote =
-                result.difference && result.difference.trim()
-                  ? result.difference
-                  : report.aiExplanation ||
-                    'AI observed no major behavior difference for this step.';
               const comparisonStatus =
                 String(result.comparisonStatus || '').toUpperCase() ||
                 (result.preStatus === result.postStatus ? 'PASS' : 'FAIL');
+              const { description, fix } = parseStepAnalysis(
+                result.difference || report.aiExplanation,
+                comparisonStatus === 'PASS',
+              );
 
               return (
                 <article className="step-report-card" key={`${result.stepName}-${index}`}>
@@ -410,17 +582,15 @@ export default function NewTest() {
                       <h4>{result.stepName}</h4>
                     </div>
                     <div className="pair-status">
-                      <span className={result.preStatus === 'PASS' ? 'pass' : 'fail'}>PRE: {result.preStatus}</span>
-                      <span className={result.postStatus === 'PASS' ? 'pass' : 'fail'}>POST: {result.postStatus}</span>
                       <span className={comparisonStatus === 'PASS' ? 'pass' : 'fail'}>
-                        COMPARISON: {comparisonStatus}
+                        {comparisonStatus === 'PASS' ? 'Match' : 'Difference Found'}
                       </span>
                     </div>
                   </header>
 
                   <div className="shot-pair">
                     <div className="shot-box">
-                      <label>Pre Migration</label>
+                      <label>Before Update</label>
                       {result.preScreenshotPath ? (
                         <img src={resolveAgentAssetUrl(result.preScreenshotPath)} alt={`Pre ${result.stepName}`} loading="lazy" />
                       ) : (
@@ -429,7 +599,7 @@ export default function NewTest() {
                     </div>
 
                     <div className="shot-box">
-                      <label>Post Migration</label>
+                      <label>After Update</label>
                       {result.postScreenshotPath ? (
                         <img src={resolveAgentAssetUrl(result.postScreenshotPath)} alt={`Post ${result.stepName}`} loading="lazy" />
                       ) : (
@@ -439,8 +609,13 @@ export default function NewTest() {
                   </div>
 
                   <div className="ai-note">
-                    <strong>AI Analysis:</strong>
-                    <p>{aiNote}</p>
+                    <strong>What This Means:</strong>
+                    <p>{description}</p>
+                    {comparisonStatus !== 'PASS' && fix && (
+                      <p className="ai-fix">
+                        <strong>Suggested Fix:</strong> {fix}
+                      </p>
+                    )}
                   </div>
                 </article>
               );

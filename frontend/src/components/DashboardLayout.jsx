@@ -7,7 +7,7 @@ export default function DashboardLayout({ view, setView, children }) {
       <aside className="sidebar">
         <div className="sidebar-brand">
           <FlaskConical size={24} />
-          <span>Migration QA</span>
+          <span>SmartParity</span>
         </div>
         <nav className="sidebar-nav">
           <button
@@ -35,7 +35,7 @@ export default function DashboardLayout({ view, setView, children }) {
             <Menu size={24} />
           </button>
           <h1 className="page-title">
-            {view === 'dashboard' ? 'Test Run Dashboard' : 'Run Migration Test'}
+            {view === 'dashboard' ? 'SmartParity Dashboard' : 'SmartParity Test Run'}
           </h1>
         </header>
         <main className="main-content">

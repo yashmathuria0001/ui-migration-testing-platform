@@ -42,7 +42,6 @@ export default function Dashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [selectedRun, setSelectedRun] = useState(null);
-  const [expandedRawLog, setExpandedRawLog] = useState(null);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
 
@@ -144,12 +143,12 @@ export default function Dashboard() {
             <table className="runs-table">
               <thead>
                 <tr>
-                  <th>ID</th>
+                  <th>Run</th>
                   <th>Status</th>
                   <th>Severity</th>
                   <th>Regression</th>
                   <th>Risk Score</th>
-                  <th>Created At</th>
+                  <th>Last Updated</th>
                   <th></th>
                 </tr>
               </thead>
@@ -160,7 +159,7 @@ export default function Dashboard() {
                     className={selectedRun?.id === run.id ? 'selected' : ''}
                     onClick={() => setSelectedRun(run)}
                   >
-                    <td className="id-cell">{run.id?.slice(0, 8) || '—'}...</td>
+                    <td className="id-cell">{formatDate(run.createdAt)}</td>
                     <td>
                       {(() => {
                         const comparisonStatus = getRunComparisonStatus(run);
@@ -178,7 +177,7 @@ export default function Dashboard() {
                     <td>
                       <span className="risk-score">{run.riskScore ?? '—'}</span>
                     </td>
-                    <td>{formatDate(run.createdAt)}</td>
+                    <td>{formatDate(run.executionEndTime || run.createdAt)}</td>
                     <td>
                       <ChevronRight size={18} className="chevron" />
                     </td>
@@ -293,32 +292,6 @@ export default function Dashboard() {
                 </div>
               </section>
 
-              <section className="drawer-section collapsible">
-                <h4
-                  className="collapsible-header"
-                  onClick={() =>
-                    setExpandedRawLog(expandedRawLog === 'pre' ? null : 'pre')
-                  }
-                >
-                  Raw Logs (Pre) {expandedRawLog === 'pre' ? '▼' : '▶'}
-                </h4>
-                {expandedRawLog === 'pre' && (
-                  <pre className="raw-log">{selectedRun.preRawOutput || 'No output'}</pre>
-                )}
-              </section>
-              <section className="drawer-section collapsible">
-                <h4
-                  className="collapsible-header"
-                  onClick={() =>
-                    setExpandedRawLog(expandedRawLog === 'post' ? null : 'post')
-                  }
-                >
-                  Raw Logs (Post) {expandedRawLog === 'post' ? '▼' : '▶'}
-                </h4>
-                {expandedRawLog === 'post' && (
-                  <pre className="raw-log">{selectedRun.postRawOutput || 'No output'}</pre>
-                )}
-              </section>
             </div>
           </div>
         </div>
