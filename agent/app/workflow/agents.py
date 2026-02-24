@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import time
 from pathlib import Path
 from collections.abc import AsyncGenerator, Callable
@@ -17,7 +16,11 @@ from app.core.logging_utils import log
 from app.core.settings import REPORTS_DIR, SCREENSHOTS_DIR
 from app.integrations.spring_client import mark_completed, mark_running
 from app.services.playwright_runner import execute_playwright, extract_structured_steps
-from app.services.regression_analysis import analyze_regression
+from app.services.regression_analysis import (
+    analyze_regression,
+    generate_overall_interpretation,
+    generate_step_interpretation,
+)
 from app.services.script_generation import generate_playwright_script
 
 
@@ -56,64 +59,8 @@ def _compute_visual_delta(pre_image_path: Path, post_image_path: Path) -> float 
     return min(1.0, (content_diff * 0.8) + (length_diff * 0.2))
 
 
-def _build_step_conclusion(
-    step_name: str,
-    pre_status: str,
-    post_status: str,
-    *,
-    ai_hint: str | None,
-    ai_fix: str | None,
-    visual_delta: float | None,
-    pre_error: str | None,
-    post_error: str | None,
-) -> str:
-    has_failure = pre_status == "FAIL" or post_status == "FAIL" or pre_status != post_status
-    has_visual_diff = visual_delta is not None and visual_delta >= 0.08
-    regression = has_failure or has_visual_diff
-    status_line = (
-        f"In '{step_name}', users may see different behavior between the old and new version."
-        if regression
-        else f"In '{step_name}', the user outcome is consistent across both versions."
-    )
-
-    if pre_error or post_error:
-        issue_line = (
-            f"Pre issue: {pre_error or 'none'}. "
-            f"Post issue: {post_error or 'none'}."
-        )
-    elif has_visual_diff:
-        issue_line = (
-            "Users may notice that this step looks or behaves differently after migration."
-        )
-    elif visual_delta is not None:
-        issue_line = "This step appears visually consistent in both versions."
-    else:
-        issue_line = "Screenshot comparison is not available for this step."
-
-    if ai_hint and not regression:
-        plain_hint = re.sub(r"\s+", " ", ai_hint.strip())
-        bad_terms = ("ms", "millisecond", "selector", "api", "playwright", "react", "dom", "latency")
-        if any(term in plain_hint.lower() for term in bad_terms):
-            plain_hint = ""
-    else:
-        plain_hint = ""
-
-    if plain_hint:
-        hint_line = f"Conclusion: {plain_hint}"
-    elif regression:
-        hint_line = (
-            "Conclusion: this step is not fully aligned between pre and post migration and should be corrected."
-        )
-    else:
-        hint_line = "Conclusion: this step is stable and matches expected user behavior."
-
-    if regression:
-        fix_value = ai_fix.strip() if ai_fix and ai_fix.strip() else (
-            "Update the post-migration screen flow so this step behaves the same way users experienced before migration."
-        )
-        fix_line = f"Suggested fix: {fix_value}"
-        return f"{status_line} {issue_line} {hint_line} {fix_line}"
-    return f"{status_line} {issue_line} {hint_line}"
+def _normalize_comparison_label(regression: bool) -> str:
+    return "Difference Found" if regression else "Match"
 
 
 class StateStepAgent(BaseAgent):
@@ -151,7 +98,9 @@ def _pre_execution_step(state: dict[str, Any]) -> None:
     test_id = state["test_run_id"]
     log(f"[{test_id}] Running PRE execution")
     script_path = state["script_path"]
-    pre_result = execute_playwright(Path(script_path), state["pre_url"], test_id, "pre")
+    artifact_run_id = str(state.get("artifact_run_id") or f"{test_id}_{state['start_time_ms']}")
+    state["artifact_run_id"] = artifact_run_id
+    pre_result = execute_playwright(Path(script_path), state["pre_url"], artifact_run_id, "pre")
     state["pre_result"] = pre_result
     state["pre_structured"] = pre_result.get("step_results") or extract_structured_steps(pre_result.get("report"))
 
@@ -160,7 +109,9 @@ def _post_execution_step(state: dict[str, Any]) -> None:
     test_id = state["test_run_id"]
     log(f"[{test_id}] Running POST execution")
     script_path = state["script_path"]
-    post_result = execute_playwright(Path(script_path), state["post_url"], test_id, "post")
+    artifact_run_id = str(state.get("artifact_run_id") or f"{test_id}_{state['start_time_ms']}")
+    state["artifact_run_id"] = artifact_run_id
+    post_result = execute_playwright(Path(script_path), state["post_url"], artifact_run_id, "post")
     state["post_result"] = post_result
     state["post_structured"] = post_result.get("step_results") or extract_structured_steps(post_result.get("report"))
 
@@ -184,6 +135,7 @@ def _regression_analysis_step(state: dict[str, Any]) -> None:
 
 def _mark_completed_step(state: dict[str, Any]) -> None:
     test_id = state["test_run_id"]
+    artifact_run_id = str(state.get("artifact_run_id") or f"{test_id}_{state['start_time_ms']}")
     duration = int(time.time() * 1000) - int(state["start_time_ms"])
     state["execution_duration_ms"] = duration
 
@@ -213,8 +165,8 @@ def _mark_completed_step(state: dict[str, Any]) -> None:
         if not ai_comparison and (index - 1) < len(step_comparisons):
             ai_comparison = step_comparisons[index - 1]
 
-        pre_rel = Path("pre") / test_id / f"step_{index}.png"
-        post_rel = Path("post") / test_id / f"step_{index}.png"
+        pre_rel = Path("pre") / artifact_run_id / f"step_{index}.png"
+        post_rel = Path("post") / artifact_run_id / f"step_{index}.png"
         visual_delta = _compute_visual_delta(
             SCREENSHOTS_DIR / pre_rel,
             SCREENSHOTS_DIR / post_rel,
@@ -231,24 +183,40 @@ def _mark_completed_step(state: dict[str, Any]) -> None:
         if has_step_visual_regression:
             visual_regression_count += 1
 
-        difference = _build_step_conclusion(
+        interpretation = generate_step_interpretation(
             step_name=step_name,
+            comparison_status=comparison_status,
             pre_status=pre_status,
             post_status=post_status,
-            ai_hint=(
+            visual_delta=visual_delta,
+            pre_error=pre_error or None,
+            post_error=post_error or None,
+            prior_difference_hint=(
                 str(ai_comparison.get("difference"))
                 if ai_comparison and ai_comparison.get("difference")
                 else None
             ),
-            ai_fix=(
+            prior_runtime_evidence=(
+                str(ai_comparison.get("runtimeEvidence"))
+                if ai_comparison and ai_comparison.get("runtimeEvidence")
+                else None
+            ),
+            prior_fix_hint=(
                 str(ai_comparison.get("recommendedFix"))
                 if ai_comparison and ai_comparison.get("recommendedFix")
                 else None
             ),
-            visual_delta=visual_delta,
-            pre_error=pre_error or None,
-            post_error=post_error or None,
         )
+
+        ai_comparison_label = interpretation.get(
+            "comparisonLabel",
+            _normalize_comparison_label(step_regression),
+        )
+        ai_exact_change = interpretation.get("exactChange", "")
+        ai_detailed_difference = interpretation.get("detailedDifference", "")
+        ai_runtime_evidence = interpretation.get("runtimeEvidence", "")
+        ai_detailed_fix = interpretation.get("detailedFix", "")
+        difference = ai_detailed_difference
 
         step_results.append(
             {
@@ -256,7 +224,12 @@ def _mark_completed_step(state: dict[str, Any]) -> None:
                 "preStatus": pre_status,
                 "postStatus": post_status,
                 "comparisonStatus": comparison_status,
+                "comparisonLabel": ai_comparison_label,
                 "difference": difference,
+                "exactChange": ai_exact_change,
+                "detailedDifference": ai_detailed_difference,
+                "runtimeEvidence": ai_runtime_evidence,
+                "detailedFix": ai_detailed_fix,
                 "regression": step_regression,
                 "preScreenshotPath": f"/screenshots/{pre_rel.as_posix()}",
                 "postScreenshotPath": f"/screenshots/{post_rel.as_posix()}",
@@ -265,20 +238,26 @@ def _mark_completed_step(state: dict[str, Any]) -> None:
 
     computed_regression = behavior_mismatch_count > 0 or visual_regression_count > 0
     state["regression_detected"] = computed_regression
-    if computed_regression:
-        state["severity"] = "HIGH" if behavior_mismatch_count > 0 else "MEDIUM"
-        state["risk_score"] = max(
-            int(state.get("risk_score", 0)),
-            min(95, 30 + (behavior_mismatch_count * 20) + (visual_regression_count * 8)),
-        )
-        state["explanation"] = (
-            f"Detected {behavior_mismatch_count} behavior mismatches and "
-            f"{visual_regression_count} visual mismatches between pre and post."
-        )
-    else:
-        state["severity"] = "LOW"
-        state["risk_score"] = min(int(state.get("risk_score", 25)), 25)
-        state["explanation"] = "Pre and post behavior matched for all compared steps."
+    overall_payload = generate_overall_interpretation(
+        regression_detected=computed_regression,
+        behavior_mismatch_count=behavior_mismatch_count,
+        visual_mismatch_count=visual_regression_count,
+        total_steps=len(step_results),
+        step_summaries=[
+            {
+                "stepName": row["stepName"],
+                "comparisonStatus": row["comparisonStatus"],
+                "comparisonLabel": row.get("comparisonLabel", ""),
+                "exactChange": row.get("exactChange", ""),
+                "detailedDifference": row.get("detailedDifference", ""),
+            }
+            for row in step_results
+        ],
+    )
+    state["severity"] = str(overall_payload.get("severity", "LOW"))
+    state["risk_score"] = int(overall_payload.get("riskScore", 0))
+    state["explanation"] = str(overall_payload.get("aiExplanation", "Analysis unavailable"))
+    state["overall_analysis"] = overall_payload.get("overallAnalysis", {})
 
     step_comparisons_payload = [
         {
@@ -286,8 +265,15 @@ def _mark_completed_step(state: dict[str, Any]) -> None:
             "preStatus": row["preStatus"],
             "postStatus": row["postStatus"],
             "comparisonStatus": row.get("comparisonStatus", "PASS"),
+            "comparisonLabel": row.get("comparisonLabel", "Match"),
             "difference": row["difference"],
+            "exactChange": row.get("exactChange", ""),
+            "detailedDifference": row.get("detailedDifference", row["difference"]),
+            "runtimeEvidence": row.get("runtimeEvidence", ""),
+            "detailedFix": row.get("detailedFix", ""),
             "regression": bool(row.get("regression", False)),
+            "preScreenshotPath": row.get("preScreenshotPath"),
+            "postScreenshotPath": row.get("postScreenshotPath"),
         }
         for row in step_results
     ]
@@ -303,6 +289,7 @@ def _mark_completed_step(state: dict[str, Any]) -> None:
                 "severity": str(state.get("severity", "LOW")),
                 "riskScore": int(state.get("risk_score", 0)),
                 "explanation": str(state.get("explanation", "Workflow completed")),
+                "overallAnalysis": state.get("overall_analysis", {}),
                 "stepComparisons": step_comparisons_payload,
             }
         ),
@@ -322,6 +309,7 @@ def _mark_completed_step(state: dict[str, Any]) -> None:
         post_raw_output=state.get("post_result", {}).get("stdout", ""),
         risk_score=state["risk_score"],
         execution_duration_ms=duration,
+        overall_analysis=state.get("overall_analysis", {}),
     )
 
 

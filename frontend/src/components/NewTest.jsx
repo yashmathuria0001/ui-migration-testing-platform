@@ -11,6 +11,7 @@ import {
   LoaderCircle,
   FileJson,
   FileSpreadsheet,
+  Github,
 } from 'lucide-react';
 
 const BACKEND_BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL || 'http://localhost:8000';
@@ -35,140 +36,46 @@ function normalizeRunStatus(status) {
   return s;
 }
 
-function buildOverallSummary(report, summary) {
-  const severity = String(report?.severity || 'LOW').toUpperCase();
-  const score = Number(report?.riskScore ?? 0);
-  const mismatch = Number(summary?.mismatch ?? 0);
-  const total = Number(summary?.total ?? 0);
-  const base = String(report?.aiExplanation || '').trim();
-
-  if (report?.status === 'FAILED') {
-    return {
-      headline: 'Run could not be completed',
-      description:
-        'The full comparison did not finish. Please run the test again so a complete side-by-side result can be generated.',
-      testerGuidance:
-        'Check that both URLs are reachable, then rerun this case to produce a full summary and recommendations.',
-    };
-  }
-
-  if (mismatch === 0) {
-    return {
-      headline: 'Migration behavior looks consistent',
-      description:
-        base || 'All compared steps behaved the same before and after the update.',
-      testerGuidance:
-        `No differences were found across ${total} checked step(s). You can proceed with confidence and keep this report as release evidence.`,
-    };
-  }
+function getOverallAnalysis(report) {
+  const source = (report?.overallAnalysis && typeof report.overallAnalysis === 'object')
+    ? report.overallAnalysis
+    : {};
+  const clean = (value, fallback = '') => {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    return text || fallback;
+  };
+  const list = (value) =>
+    Array.isArray(value)
+      ? value.map((item) => clean(item)).filter(Boolean)
+      : [];
 
   return {
-    headline: `${mismatch} difference(s) need review`,
-    description:
-      base ||
-      `Some steps behaved differently after the update. This may impact user trust if left unresolved.`,
-    testerGuidance:
-      `Priority: ${severity} (score ${score}/100). Review each highlighted step below, apply the suggested fix, and rerun this test to confirm alignment.`,
+    headline: clean(source.headline, 'Overall Analysis'),
+    description: clean(source.description, clean(report?.aiExplanation, 'Analysis unavailable.')),
+    testerGuidance: clean(source.testerGuidance, 'Review highlighted steps and rerun after fixes.'),
+    observations: list(source.keyObservations),
+    impact: clean(source.userImpact, clean(report?.aiExplanation, '')),
+    nextActions: list(source.nextActions),
   };
 }
 
-function buildDetailedTopAnalysis(report, summary) {
-  const results = Array.isArray(report?.results) ? report.results : [];
-  const mismatchSteps = results.filter((row) => {
-    const status = String(row.comparisonStatus || '').toUpperCase();
-    if (status === 'FAIL') return true;
-    if (status === 'PASS') return false;
-    return row.preStatus !== row.postStatus;
-  });
-  const matchedCount = Math.max(0, (summary?.total || 0) - (summary?.mismatch || 0));
-  const severity = String(report?.severity || 'LOW').toUpperCase();
-  const confidence = Number(report?.riskScore ?? 0);
-
-  const observations = [];
-  observations.push(
-    `${matchedCount} of ${summary?.total || 0} step(s) behaved the same before and after the update.`
-  );
-  if ((summary?.mismatch || 0) > 0) {
-    observations.push(
-      `${summary?.mismatch || 0} step(s) showed a visible or behavioral difference and require review.`
-    );
-    const names = mismatchSteps.map((s) => s.stepName).filter(Boolean).slice(0, 3);
-    if (names.length > 0) {
-      observations.push(`Main differences were found in: ${names.join(', ')}.`);
-    }
-  } else {
-    observations.push('No meaningful differences were detected in this run.');
-  }
-
-  const impact =
-    (summary?.mismatch || 0) === 0
-      ? 'User experience is currently stable across both versions for the steps tested.'
-      : severity === 'HIGH'
-        ? 'These differences can create user confusion or block important tasks, so they should be fixed before release.'
-        : 'These differences may reduce consistency and trust, so they should be addressed in the next update cycle.';
-
-  const nextActions = [];
-  if ((summary?.mismatch || 0) > 0) {
-    nextActions.push('Review each failed step below and apply the suggested fix.');
-    nextActions.push('Re-run this same test case after fixes to confirm behavior is aligned.');
-    nextActions.push('Prioritize steps that affect primary user actions first.');
-  } else {
-    nextActions.push('Keep this report as validation evidence for migration sign-off.');
-    nextActions.push('Run the same case again after any future UI changes.');
-  }
-
-  return {
-    severity,
-    confidence,
-    observations,
-    impact,
-    nextActions,
-  };
-}
-
-function parseStepAnalysis(rawText, isPass) {
-  const cleaned = String(rawText || '')
-    .replace(/\s+/g, ' ')
-    .replace(/Pre issue:\s*none\.\s*Post issue:\s*none\./gi, '')
-    .replace(/Pre issue:/gi, 'Before update:')
-    .replace(/Post issue:/gi, 'After update:')
-    .replace(/this step is not fully aligned between pre and post migration/gi, 'this step behaves differently after the update')
-    .replace(/user outcome is consistent across both versions/gi, 'users see the same result in both versions')
-    .trim();
-  if (!cleaned) {
-    return {
-      description: isPass
-        ? 'This step behaved the same before and after the update.'
-        : 'This step behaved differently after the update and should be reviewed.',
-      fix: isPass
-        ? ''
-        : 'Align this step in the updated version so users see the same outcome as before.',
-    };
-  }
-
-  const splitToken = 'Suggested fix:';
-  if (cleaned.includes(splitToken)) {
-    const [desc, ...fixParts] = cleaned.split(splitToken);
-    return {
-      description: desc.trim(),
-      fix: fixParts.join(splitToken).trim(),
-    };
-  }
-
-  return {
-    description: cleaned,
-    fix: isPass
-      ? ''
-      : 'Align this step in the updated version so users see the same outcome as before.',
-  };
+function getAgentAnalysisText(value, fallback = 'Not provided by agent.') {
+  const cleaned = String(value || '').replace(/\s+/g, ' ').trim();
+  return cleaned || fallback;
 }
 
 export default function NewTest() {
+  const [appId, setAppId] = useState('');
+  const [appCredentials, setAppCredentials] = useState('');
   const [preUrl, setPreUrl] = useState('');
   const [postUrl, setPostUrl] = useState('');
   const [importType, setImportType] = useState('excel');
   const [file, setFile] = useState(null);
   const [jsonSteps, setJsonSteps] = useState([]);
+  const [githubRepository, setGithubRepository] = useState('');
+  const [githubFilePath, setGithubFilePath] = useState('');
+  const [githubBranch, setGithubBranch] = useState('main');
+  const [githubToken, setGithubToken] = useState('');
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState(null);
   const [error, setError] = useState(null);
@@ -224,32 +131,117 @@ export default function NewTest() {
     }, 2800);
   };
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const f = e.target.files?.[0] || null;
     setFile(f);
     setJsonSteps([]);
     setError(null);
 
-    if (!f || importType !== 'json') return;
+    if (!f) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
+    if (importType === 'json') {
       try {
-        const parsed = JSON.parse(String(reader.result || '{}'));
+        const parsed = JSON.parse(await f.text());
+        const nextAppId = typeof parsed.appId === 'string' ? parsed.appId : '';
+        const nextAppCredentials = typeof parsed.appCredentials === 'string' ? parsed.appCredentials : '';
         const nextPre = typeof parsed.preMigrationUrl === 'string' ? parsed.preMigrationUrl : '';
         const nextPost = typeof parsed.postMigrationUrl === 'string' ? parsed.postMigrationUrl : '';
         const nextSteps = Array.isArray(parsed.steps)
           ? parsed.steps.filter((s) => typeof s === 'string' && s.trim())
           : [];
 
+        if (nextAppId) setAppId(nextAppId);
+        if (nextAppCredentials) setAppCredentials(nextAppCredentials);
         if (nextPre) setPreUrl(nextPre);
         if (nextPost) setPostUrl(nextPost);
         setJsonSteps(nextSteps);
       } catch {
         setError('Invalid JSON file. Upload a valid JSON with preMigrationUrl, postMigrationUrl, and steps[]');
       }
-    };
-    reader.readAsText(f);
+      return;
+    }
+
+    if (importType === 'excel') {
+      try {
+        const XLSX = await import('xlsx');
+        const workbook = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+        const sheetNames = Array.isArray(workbook.SheetNames) ? workbook.SheetNames : [];
+        const firstSheetName = sheetNames[0];
+        if (!firstSheetName) {
+          setError('Excel file has no sheet.');
+          return;
+        }
+        const sheet = workbook.Sheets[firstSheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
+        if (!Array.isArray(rows) || rows.length === 0) {
+          setError('Excel file is empty.');
+          return;
+        }
+
+        const normalized = rows.map((row) =>
+          Array.isArray(row) ? row.map((cell) => String(cell || '').trim()) : []
+        );
+        const metadataRows = sheetNames.flatMap((name) => {
+          const current = workbook.Sheets[name];
+          const currentRows = XLSX.utils.sheet_to_json(current, { header: 1, raw: false, defval: '' });
+          return Array.isArray(currentRows)
+            ? currentRows.map((row) => (Array.isArray(row) ? row.map((cell) => String(cell || '').trim()) : []))
+            : [];
+        });
+
+        const findMetaValue = (key) => {
+          const wanted = key.toLowerCase();
+          for (const row of metadataRows) {
+            const left = String(row[0] || '').toLowerCase();
+            const right = String(row[1] || '').trim();
+            if (left === wanted && right) return right;
+          }
+          return '';
+        };
+
+        const header = normalized[0] || [];
+        const firstHeader = String(header[0] || '').toLowerCase();
+        const secondHeader = String(header[1] || '').toLowerCase();
+
+        let steps = [];
+        if (firstHeader === 'step') {
+          steps = normalized
+            .slice(1)
+            .map((row) => String(row[0] || '').trim())
+            .filter(Boolean);
+        } else {
+          steps = normalized
+            .map((row) => String(row[0] || '').trim())
+            .filter((cell) => {
+              const lower = cell.toLowerCase();
+              return cell && !['step', 'appid', 'appcredentials', 'premigrationurl', 'postmigrationurl'].includes(lower);
+            });
+        }
+
+        if (firstHeader === 'key' && secondHeader === 'value') {
+          const maybeStepsStart = normalized.findIndex((row) => String(row[0] || '').toLowerCase() === 'step');
+          if (maybeStepsStart >= 0) {
+            steps = normalized
+              .slice(maybeStepsStart + 1)
+              .map((row) => String(row[0] || '').trim())
+              .filter(Boolean);
+          }
+        }
+
+        const nextAppId = findMetaValue('appId');
+        const nextAppCredentials = findMetaValue('appCredentials');
+        const nextPre = findMetaValue('preMigrationUrl');
+        const nextPost = findMetaValue('postMigrationUrl');
+
+        if (nextAppId) setAppId(nextAppId);
+        if (nextAppCredentials) setAppCredentials(nextAppCredentials);
+        if (nextPre) setPreUrl(nextPre);
+        if (nextPost) setPostUrl(nextPost);
+        setJsonSteps(steps);
+      } catch {
+        setError('Invalid Excel file. Use .xlsx/.xls with a step column and optional metadata fields.');
+      }
+    }
   };
 
   const summary = useMemo(() => {
@@ -272,11 +264,7 @@ export default function NewTest() {
             : 'No user-facing differences detected',
     };
   }, [report]);
-  const overallSummary = useMemo(() => buildOverallSummary(report, summary), [report, summary]);
-  const detailedTopAnalysis = useMemo(
-    () => buildDetailedTopAnalysis(report, summary),
-    [report, summary],
-  );
+  const overallAnalysis = useMemo(() => getOverallAnalysis(report), [report]);
 
   const getFriendlyRunStatus = (status) => {
     const normalized = String(status || '').toUpperCase();
@@ -287,16 +275,21 @@ export default function NewTest() {
     return 'In Progress';
   };
 
-  const resolveAgentAssetUrl = (maybePath) => {
+  const resolveAgentAssetUrl = (maybePath, cacheKey) => {
     if (!maybePath) return null;
-    if (maybePath.startsWith('http://') || maybePath.startsWith('https://')) return maybePath;
+    const cacheSuffix = cacheKey ? `${maybePath.includes('?') ? '&' : '?'}v=${encodeURIComponent(String(cacheKey))}` : '';
+    if (maybePath.startsWith('http://') || maybePath.startsWith('https://')) return `${maybePath}${cacheSuffix}`;
     if (maybePath.startsWith('/screenshots/') || maybePath.startsWith('/reports/')) {
-      return `${BACKEND_BASE_URL}/api/assets${maybePath}`;
+      return `${BACKEND_BASE_URL}/api/assets${maybePath}${cacheSuffix}`;
     }
-    return `${AGENT_ASSET_BASE_URL}${maybePath}`;
+    return `${AGENT_ASSET_BASE_URL}${maybePath}${cacheSuffix}`;
   };
 
   const runTest = async () => {
+    if (!appId.trim() || !appCredentials.trim()) {
+      setError('Please provide App ID and App Credentials before running security checks.');
+      return;
+    }
     if (!preUrl || !postUrl) {
       setError('Please provide both PRE and POST migration URLs.');
       return;
@@ -307,6 +300,10 @@ export default function NewTest() {
     }
     if (importType === 'json' && (!file || jsonSteps.length === 0)) {
       setError('Please upload a JSON test case that includes steps.');
+      return;
+    }
+    if (importType === 'github' && (!githubRepository.trim() || !githubFilePath.trim())) {
+      setError('Please provide GitHub repository and file path.');
       return;
     }
 
@@ -330,13 +327,23 @@ export default function NewTest() {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
         testRunId = uploadRes.data.id;
-      } else {
+      } else if (importType === 'json') {
         const createRes = await api.post('/testruns/create', {
           preMigrationUrl: preUrl,
           postMigrationUrl: postUrl,
           steps: jsonSteps,
         });
         testRunId = createRes.data.id;
+      } else {
+        const githubRes = await api.post('/testruns/github', {
+          repository: githubRepository.trim(),
+          filePath: githubFilePath.trim(),
+          branch: githubBranch.trim() || 'main',
+          githubToken: githubToken.trim() || undefined,
+          preMigrationUrl: preUrl,
+          postMigrationUrl: postUrl,
+        });
+        testRunId = githubRes.data.id;
       }
 
       setStageStatus(0, 'done', 'Test scenario prepared successfully.');
@@ -420,9 +427,40 @@ export default function NewTest() {
             >
               <FileJson size={16} /> JSON
             </button>
+            <button
+              type="button"
+              className={importType === 'github' ? 'active' : ''}
+              onClick={() => {
+                setImportType('github');
+                setFile(null);
+                setJsonSteps([]);
+              }}
+            >
+              <Github size={16} /> GitHub Repo
+            </button>
           </div>
 
           <div className="form-stack">
+            <label>
+              App ID
+              <input
+                type="text"
+                placeholder="Enter application ID"
+                value={appId}
+                onChange={(e) => setAppId(e.target.value)}
+              />
+            </label>
+
+            <label>
+              App Credentials
+              <input
+                type="password"
+                placeholder="Enter application credentials"
+                value={appCredentials}
+                onChange={(e) => setAppCredentials(e.target.value)}
+              />
+            </label>
+
             <label>
               PRE Migration URL
               <input
@@ -443,24 +481,67 @@ export default function NewTest() {
               />
             </label>
 
-            <label>
-              Test File ({importType.toUpperCase()})
-              <div className="file-input-wrap">
-                <input
-                  id="case-file"
-                  type="file"
-                  accept={importType === 'excel' ? '.xlsx,.xls' : '.json'}
-                  onChange={handleFileChange}
-                />
-                <label htmlFor="case-file" className="file-pick">
-                  <Upload size={16} />
-                  {file ? file.name : `Choose ${importType.toUpperCase()} file`}
-                </label>
-              </div>
-            </label>
+            {importType !== 'github' && (
+              <label>
+                Test File ({importType.toUpperCase()})
+                <div className="file-input-wrap">
+                  <input
+                    id="case-file"
+                    type="file"
+                    accept={importType === 'excel' ? '.xlsx,.xls' : '.json'}
+                    onChange={handleFileChange}
+                  />
+                  <label htmlFor="case-file" className="file-pick">
+                    <Upload size={16} />
+                    {file ? file.name : `Choose ${importType.toUpperCase()} file`}
+                  </label>
+                </div>
+              </label>
+            )}
 
-            {importType === 'json' && jsonSteps.length > 0 && (
-              <p className="muted">Detected {jsonSteps.length} steps from JSON.</p>
+            {importType === 'github' && (
+              <>
+                <label>
+                  GitHub Repository
+                  <input
+                    type="text"
+                    placeholder="owner/repository"
+                    value={githubRepository}
+                    onChange={(e) => setGithubRepository(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Testcase File Path
+                  <input
+                    type="text"
+                    placeholder="path/to/case.json | case.yml | case.spec.ts"
+                    value={githubFilePath}
+                    onChange={(e) => setGithubFilePath(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Branch
+                  <input
+                    type="text"
+                    placeholder="main"
+                    value={githubBranch}
+                    onChange={(e) => setGithubBranch(e.target.value)}
+                  />
+                </label>
+                <label>
+                  GitHub Token (Optional)
+                  <input
+                    type="password"
+                    placeholder="For private repositories"
+                    value={githubToken}
+                    onChange={(e) => setGithubToken(e.target.value)}
+                  />
+                </label>
+              </>
+            )}
+
+            {(importType === 'json' || importType === 'excel') && jsonSteps.length > 0 && (
+              <p className="muted">Detected {jsonSteps.length} steps from {importType.toUpperCase()}.</p>
             )}
 
             <button className="primary-run" onClick={runTest} disabled={loading}>
@@ -518,33 +599,33 @@ export default function NewTest() {
 
           <section className="overall-analysis">
             <h4>Overall Analysis</h4>
-            <p className="overall-headline">{overallSummary.headline}</p>
-            <p>{overallSummary.description}</p>
+            <p className="overall-headline">{overallAnalysis.headline}</p>
+            <p>{overallAnalysis.description}</p>
             <p className="tester-guidance">
-              <strong>Tester Guidance:</strong> {overallSummary.testerGuidance}
+              <strong>Tester Guidance:</strong> {overallAnalysis.testerGuidance}
             </p>
             <div className="overall-grid">
               <div className="overall-block">
                 <h5>Key Observations</h5>
                 <ul>
-                  {detailedTopAnalysis.observations.map((item, idx) => (
+                  {overallAnalysis.observations.map((item, idx) => (
                     <li key={`obs-${idx}`}>{item}</li>
                   ))}
                 </ul>
               </div>
               <div className="overall-block">
                 <h5>User Impact</h5>
-                <p>{detailedTopAnalysis.impact}</p>
+                <p>{overallAnalysis.impact}</p>
               </div>
             </div>
             <div className="overall-foot">
-              <span>Impact Level: {detailedTopAnalysis.severity}</span>
-              <span>Confidence Score: {detailedTopAnalysis.confidence}/100</span>
+              <span>Impact Level: {report?.severity || 'LOW'}</span>
+              <span>Confidence Score: {report?.riskScore ?? 0}/100</span>
             </div>
             <div className="overall-block">
               <h5>Recommended Next Actions</h5>
               <ol>
-                {detailedTopAnalysis.nextActions.map((item, idx) => (
+                {overallAnalysis.nextActions.map((item, idx) => (
                   <li key={`next-${idx}`}>{item}</li>
                 ))}
               </ol>
@@ -559,7 +640,7 @@ export default function NewTest() {
           </div>
 
           {report?.combinedReportPath && (
-            <a className="report-link" href={resolveAgentAssetUrl(report.combinedReportPath)} target="_blank" rel="noreferrer">
+            <a className="report-link" href={resolveAgentAssetUrl(report.combinedReportPath, report.executionEndTime)} target="_blank" rel="noreferrer">
               Open Full HTML Report <ExternalLink size={14} />
             </a>
           )}
@@ -567,12 +648,20 @@ export default function NewTest() {
           <div className="step-report-grid">
             {(report.results || []).map((result, index) => {
               const comparisonStatus =
-                String(result.comparisonStatus || '').toUpperCase() ||
-                (result.preStatus === result.postStatus ? 'PASS' : 'FAIL');
-              const { description, fix } = parseStepAnalysis(
-                result.difference || report.aiExplanation,
-                comparisonStatus === 'PASS',
+                String(result?.comparisonStatus || '').toUpperCase() ||
+                (result?.preStatus === result?.postStatus ? 'PASS' : 'FAIL');
+              const comparisonLabel = getAgentAnalysisText(
+                result?.comparisonLabel,
+                comparisonStatus === 'PASS' ? 'Match' : 'Difference Found',
               );
+              const exactChange = getAgentAnalysisText(result?.exactChange);
+              const detailedDifference = getAgentAnalysisText(
+                result?.detailedDifference || result?.difference,
+              );
+              const runtimeEvidence = getAgentAnalysisText(result?.runtimeEvidence);
+              const detailedFix = comparisonStatus === 'FAIL'
+                ? getAgentAnalysisText(result?.detailedFix, 'Fix recommendation not provided by agent.')
+                : getAgentAnalysisText(result?.detailedFix, 'No fix required for this step.');
 
               return (
                 <article className="step-report-card" key={`${result.stepName}-${index}`}>
@@ -583,7 +672,7 @@ export default function NewTest() {
                     </div>
                     <div className="pair-status">
                       <span className={comparisonStatus === 'PASS' ? 'pass' : 'fail'}>
-                        {comparisonStatus === 'PASS' ? 'Match' : 'Difference Found'}
+                        {comparisonLabel}
                       </span>
                     </div>
                   </header>
@@ -592,7 +681,7 @@ export default function NewTest() {
                     <div className="shot-box">
                       <label>Before Update</label>
                       {result.preScreenshotPath ? (
-                        <img src={resolveAgentAssetUrl(result.preScreenshotPath)} alt={`Pre ${result.stepName}`} loading="lazy" />
+                        <img src={resolveAgentAssetUrl(result.preScreenshotPath, report.executionEndTime)} alt={`Pre ${result.stepName}`} loading="lazy" />
                       ) : (
                         <div className="shot-empty"><ImageIcon size={18} /> No image</div>
                       )}
@@ -601,7 +690,7 @@ export default function NewTest() {
                     <div className="shot-box">
                       <label>After Update</label>
                       {result.postScreenshotPath ? (
-                        <img src={resolveAgentAssetUrl(result.postScreenshotPath)} alt={`Post ${result.stepName}`} loading="lazy" />
+                        <img src={resolveAgentAssetUrl(result.postScreenshotPath, report.executionEndTime)} alt={`Post ${result.stepName}`} loading="lazy" />
                       ) : (
                         <div className="shot-empty"><ImageIcon size={18} /> No image</div>
                       )}
@@ -609,13 +698,25 @@ export default function NewTest() {
                   </div>
 
                   <div className="ai-note">
-                    <strong>What This Means:</strong>
-                    <p>{description}</p>
-                    {comparisonStatus !== 'PASS' && fix && (
-                      <p className="ai-fix">
-                        <strong>Suggested Fix:</strong> {fix}
-                      </p>
-                    )}
+                    <strong>Analysis Report</strong>
+                    <div className="analysis-grid">
+                      <div className="analysis-block">
+                        <h5>Exact Change Found</h5>
+                        <p>{exactChange}</p>
+                      </div>
+                      <div className="analysis-block">
+                        <h5>Detailed Difference</h5>
+                        <p>{detailedDifference}</p>
+                      </div>
+                      <div className="analysis-block">
+                        <h5>Runtime Evidence Used</h5>
+                        <p>{runtimeEvidence}</p>
+                      </div>
+                      <div className="analysis-block fix">
+                        <h5>Detailed Fix Recommendation</h5>
+                        <p>{detailedFix}</p>
+                      </div>
+                    </div>
                   </div>
                 </article>
               );

@@ -45,7 +45,7 @@ public class AssetProxyController {
             HttpHeaders headers = new HttpHeaders();
             MediaType contentType = response.getHeaders().getContentType();
             headers.setContentType(contentType != null ? contentType : fallbackType);
-            headers.setCacheControl("max-age=3600");
+            headers.setCacheControl("no-store, no-cache, must-revalidate, max-age=0");
             return new ResponseEntity<>(body, headers, HttpStatus.OK);
         } catch (RestClientResponseException e) {
             return ResponseEntity.status(e.getStatusCode()).build();

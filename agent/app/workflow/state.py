@@ -19,4 +19,5 @@ class WorkflowResult(BaseModel):
     severity: str
     risk_score: int
     explanation: str
+    overall_analysis: dict[str, Any]
     step_comparisons: list[dict[str, Any]]

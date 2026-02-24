@@ -294,6 +294,19 @@ Example:
 curl -X POST http://localhost:8000/api/execution/loan-app-migration-test-01/run
 ```
 
+## GitHub testcase import
+
+You can create runs directly from testcase JSON stored in GitHub using:
+- `POST /api/testruns/github`
+
+Supported GitHub testcase formats:
+- `.json`
+- `.yml` / `.yaml`
+- `.spec.ts` / `.spec.js`
+
+Full usage guide:
+- `/Users/yash/Documents/GitHub/ui-migration-testing-platform/docs/GITHUB_TESTCASE_IMPORT.md`
+
 ---
 
 ## 11. PASS/FAIL Logic (Current)

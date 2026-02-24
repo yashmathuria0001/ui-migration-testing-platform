@@ -22,4 +22,5 @@ class ScriptResponse(BaseModel):
     severity: str
     riskScore: int
     explanation: str
+    overallAnalysis: dict[str, Any]
     stepComparisons: list[dict[str, Any]]

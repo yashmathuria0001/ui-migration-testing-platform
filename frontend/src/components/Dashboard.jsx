@@ -21,14 +21,15 @@ function SeverityBadge({ severity }) {
   return <span className={`severity-badge ${cls}`}>{severity || '—'}</span>;
 }
 
-function resolveAgentUrl(path) {
+function resolveAgentUrl(path, cacheKey) {
   if (!path) return null;
-  if (path.startsWith('http')) return path;
+  const cacheSuffix = cacheKey ? `${path.includes('?') ? '&' : '?'}v=${encodeURIComponent(String(cacheKey))}` : '';
+  if (path.startsWith('http')) return `${path}${cacheSuffix}`;
   // Use backend proxy for screenshots to avoid CORS
   if (path.startsWith('/screenshots/')) {
-    return `${BACKEND_BASE_URL}/api/assets${path}`;
+    return `${BACKEND_BASE_URL}/api/assets${path}${cacheSuffix}`;
   }
-  return `${AGENT_ASSET_BASE_URL}${path}`;
+  return `${AGENT_ASSET_BASE_URL}${path}${cacheSuffix}`;
 }
 
 export default function Dashboard() {
@@ -239,7 +240,7 @@ export default function Dashboard() {
                   <ul className="failed-tests-list">
                     {failedTests(selectedRun).map((r, i) => (
                       <li key={i}>
-                        <strong>{r.stepName}</strong> — Comparison: {r.comparisonStatus || (r.preStatus === r.postStatus ? 'PASS' : 'FAIL')}
+                        <strong>{r.stepName}</strong> — Comparison: {r.comparisonLabel || (String(r.comparisonStatus || '').toUpperCase() === 'PASS' ? 'Match' : 'Difference Found')}
                         {r.difference && <div className="diff">{r.difference}</div>}
                       </li>
                     ))}
@@ -271,7 +272,7 @@ export default function Dashboard() {
                 <div className="screenshot-preview">
                   {selectedRun.results?.[0]?.preScreenshotPath ? (
                     <img
-                      src={resolveAgentUrl(selectedRun.results[0].preScreenshotPath)}
+                      src={resolveAgentUrl(selectedRun.results[0].preScreenshotPath, selectedRun.executionEndTime)}
                       alt="Pre"
                     />
                   ) : (
@@ -281,7 +282,7 @@ export default function Dashboard() {
                   )}
                   {selectedRun.results?.[0]?.postScreenshotPath ? (
                     <img
-                      src={resolveAgentUrl(selectedRun.results[0].postScreenshotPath)}
+                      src={resolveAgentUrl(selectedRun.results[0].postScreenshotPath, selectedRun.executionEndTime)}
                       alt="Post"
                     />
                   ) : (

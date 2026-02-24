@@ -73,6 +73,7 @@ class WorkflowRunner:
                 severity=str(snapshot.get("severity", "LOW")),
                 risk_score=int(snapshot.get("riskScore", 0)),
                 explanation=str(snapshot.get("explanation", "Workflow completed")),
+                overall_analysis=dict(snapshot.get("overallAnalysis", {})),
                 step_comparisons=list(snapshot.get("stepComparisons", [])),
             )
 
@@ -89,5 +90,6 @@ class WorkflowRunner:
             severity=str(state.get("severity", "LOW")),
             risk_score=int(state.get("risk_score", 0)),
             explanation=str(state.get("explanation", "Workflow completed")),
+            overall_analysis=dict(state.get("overall_analysis", {})),
             step_comparisons=list(state.get("step_comparisons", [])),
         )

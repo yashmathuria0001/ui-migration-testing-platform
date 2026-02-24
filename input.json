@@ -1,4 +1,6 @@
 {
+  "appId": "smartparity-demo-app",
+  "appCredentials": "demo-secure-token-123",
   "preMigrationUrl": "http://localhost:3000/",
   "postMigrationUrl": "http://localhost:3001/",
   "steps": [

@@ -49,6 +49,7 @@ async def generate_script(request: ScriptRequest):
             "severity": result.severity,
             "riskScore": result.risk_score,
             "explanation": result.explanation,
+            "overallAnalysis": result.overall_analysis,
             "stepComparisons": result.step_comparisons,
         }
     except Exception as exc:

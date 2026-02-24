@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -70,7 +71,8 @@ public class TestRunService {
             String preRawOutput,
             String postRawOutput,
             Integer riskScore,
-            Long executionDurationMs) {
+            Long executionDurationMs,
+            Map<String, Object> overallAnalysis) {
 
         TestRun run = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("TestRun not found"));
@@ -78,9 +80,7 @@ public class TestRunService {
         run.setStatus("COMPLETED");
         run.setExecutionEndTime(LocalDateTime.now());
         run.setErrorMessage(null);
-        if (results != null) {
-            run.setResults(results);
-        }
+        run.setResults(results != null ? results : java.util.List.of());
         if (reportPath != null && !reportPath.isBlank()) {
             run.setCombinedReportPath(reportPath);
         }
@@ -95,6 +95,7 @@ public class TestRunService {
         run.setPostRawOutput(postRawOutput);
         run.setRiskScore(riskScore);
         run.setExecutionDurationMs(executionDurationMs);
+        run.setOverallAnalysis(overallAnalysis);
 
         return repository.save(run);
     }

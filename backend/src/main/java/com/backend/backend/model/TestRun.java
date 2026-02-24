@@ -6,6 +6,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @NoArgsConstructor
@@ -50,4 +51,5 @@ public class TestRun {
     // Risk & Execution Metrics
     private Integer riskScore;
     private Long executionDurationMs;
+    private Map<String, Object> overallAnalysis;
 }

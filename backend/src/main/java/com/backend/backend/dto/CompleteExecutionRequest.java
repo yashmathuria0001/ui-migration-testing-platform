@@ -4,6 +4,7 @@ import com.backend.backend.model.StepResult;
 import lombok.Data;
 
 import java.util.List;
+import java.util.Map;
 
 @Data
 public class CompleteExecutionRequest {
@@ -22,4 +23,5 @@ public class CompleteExecutionRequest {
     private String postRawOutput;
     private Integer riskScore;
     private Long executionDurationMs;
+    private Map<String, Object> overallAnalysis;
 }

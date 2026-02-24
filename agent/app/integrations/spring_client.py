@@ -29,6 +29,7 @@ def mark_completed(
     post_raw_output: str,
     risk_score: int,
     execution_duration_ms: int,
+    overall_analysis: dict[str, Any],
 ) -> None:
     payload = {
         "results": results,
@@ -41,6 +42,7 @@ def mark_completed(
         "postRawOutput": post_raw_output,
         "riskScore": risk_score,
         "executionDurationMs": execution_duration_ms,
+        "overallAnalysis": overall_analysis,
     }
     _put(f"/api/execution/{test_id}/complete", payload)
 

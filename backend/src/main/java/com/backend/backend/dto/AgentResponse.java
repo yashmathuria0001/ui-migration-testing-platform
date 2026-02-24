@@ -1,7 +1,9 @@
 package com.backend.backend.dto;
 
 import java.util.List;
+import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 @Data
@@ -13,6 +15,8 @@ public class AgentResponse {
     // Single run output
     private String executionOutput;
     private String executionError;
+    @JsonProperty("error")
+    private String error;
 
     // Migration comparison fields
     private Boolean preStatus;
@@ -31,7 +35,9 @@ public class AgentResponse {
     private String postRawOutput;
 
     private List<StepResultDTO> results;
+    private List<StepResultDTO> stepComparisons;
 
     private Integer riskScore;
     private Long executionDurationMs;
+    private Map<String, Object> overallAnalysis;
 }

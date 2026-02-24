@@ -2,6 +2,7 @@ package com.backend.backend.controller;
 
 import com.backend.backend.dto.AgentResponse;
 import com.backend.backend.dto.CompleteExecutionRequest;
+import com.backend.backend.dto.StepResultDTO;
 import com.backend.backend.model.StepResult;
 import com.backend.backend.dto.FailExecutionRequest;
 import com.backend.backend.model.TestRun;
@@ -45,7 +46,8 @@ public class ExecutionController {
                 request.getPreRawOutput(),
                 request.getPostRawOutput(),
                 request.getRiskScore(),
-                request.getExecutionDurationMs()
+                request.getExecutionDurationMs(),
+                request.getOverallAnalysis()
         );
     }
 
@@ -86,15 +88,25 @@ public class ExecutionController {
             // 4️⃣ Update DB based on result
             if ("SUCCESS".equals(response.getStatus())) {
 
+                List<StepResultDTO> sourceStepResults = response.getResults();
+                if (sourceStepResults == null || sourceStepResults.isEmpty()) {
+                    sourceStepResults = response.getStepComparisons();
+                }
+
                 List<StepResult> stepResults = null;
-                if (response.getResults() != null) {
-                    stepResults = response.getResults().stream()
+                if (sourceStepResults != null) {
+                    stepResults = sourceStepResults.stream()
                             .map(dto -> StepResult.builder()
                                     .stepName(dto.getStepName())
                                     .preStatus(dto.getPreStatus())
                                     .postStatus(dto.getPostStatus())
                                     .comparisonStatus(dto.getComparisonStatus())
+                                    .comparisonLabel(dto.getComparisonLabel())
                                     .difference(dto.getDifference())
+                                    .exactChange(dto.getExactChange())
+                                    .detailedDifference(dto.getDetailedDifference())
+                                    .runtimeEvidence(dto.getRuntimeEvidence())
+                                    .detailedFix(dto.getDetailedFix())
                                     .preScreenshotPath(dto.getPreScreenshotPath())
                                     .postScreenshotPath(dto.getPostScreenshotPath())
                                     .build())
@@ -115,14 +127,15 @@ public class ExecutionController {
                         response.getPreRawOutput(),
                         response.getPostRawOutput(),
                         response.getRiskScore(),
-                        response.getExecutionDurationMs()
+                        response.getExecutionDurationMs(),
+                        response.getOverallAnalysis()
                 );
 
             } else {
 
                 return testRunService.markAsFailed(
                         id,
-                        response.getExecutionError()
+                        response.getExecutionError() != null ? response.getExecutionError() : response.getError()
                 );
             }
 
