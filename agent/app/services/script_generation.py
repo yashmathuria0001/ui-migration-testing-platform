@@ -93,40 +93,40 @@ def _should_use_deterministic_script(steps: list[str]) -> bool:
     return any(marker in joined for marker in deterministic_markers)
 
 
-def _fallback_action(step_text: str) -> str:
+def _fallback_action(step_text: str) -> tuple[str, str]:
     text = step_text.lower()
     if "verify" in text or "should show" in text or "is visible" in text:
         escaped = _escape_js(step_text)
-        return f"await verifyStep(page, '{escaped}');"
+        return f"await verifyStep(page, '{escaped}');", "verification"
     if "view statements" in text:
-        return "await clickViewStatements(page);"
+        return "await clickViewStatements(page);", "action"
     if "contact support" in text:
-        return "await clickContactSupport(page);"
+        return "await clickContactSupport(page);", "action"
     if "make a payment" in text:
-        return "await clickMakePayment(page);"
+        return "await clickMakePayment(page);", "action"
     if "logout" in text:
-        return "await clickLogout(page);"
+        return "await clickLogout(page);", "action"
     if "send message" in text:
-        return "await clickSendMessage(page);"
+        return "await clickSendMessage(page);", "action"
     if "fill payment date" in text:
-        return "await fillPaymentDate(page);"
+        return "await fillPaymentDate(page);", "action"
     if "support email" in text:
-        return "await fillSupportEmail(page);"
+        return "await fillSupportEmail(page);", "action"
     if "support phone" in text:
-        return "await fillSupportPhone(page);"
+        return "await fillSupportPhone(page);", "action"
     if "inquiry text" in text or "describe your inquiry" in text:
-        return "await fillSupportMessage(page);"
+        return "await fillSupportMessage(page);", "action"
     if "open" in text or "goto" in text or "login page" in text:
-        return "await page.goto(process.env.BASE_URL);"
+        return "await page.goto(process.env.BASE_URL);", "navigation"
     if "username" in text or "user name" in text or "email" in text:
-        return "await fillUsername(page);"
+        return "await fillUsername(page);", "action"
     if "password" in text or "pass" in text:
-        return "await fillPassword(page);"
+        return "await fillPassword(page);", "action"
     if "sign in" in text or "login" in text:
-        return "await clickLogin(page);"
+        return "await clickLogin(page);", "action"
     if "submit payment" in text:
-        return "await clickSubmitPayment(page);"
-    return "await page.waitForTimeout(250);"
+        return "await clickSubmitPayment(page);", "action"
+    return "await page.waitForTimeout(250);", "action"
 
 
 def _fallback_script(steps: list[str]) -> str:
@@ -348,7 +348,7 @@ def _fallback_script(steps: list[str]) -> str:
 
     for index, step in enumerate(steps, start=1):
         safe_step = _escape_js(step)
-        action = _fallback_action(step)
+        action, step_kind = _fallback_action(step)
         screenshot_path = (
             "`screenshots/${process.env.RUN_LABEL}/${process.env.TEST_RUN_ID}/"
             f"step_{index}.png`"
@@ -363,7 +363,7 @@ def _fallback_script(steps: list[str]) -> str:
                 "      await page.waitForTimeout(450);",
                 "      await page.evaluate(() => window.scrollTo(0, 0));",
                 f"      await page.screenshot({{ path: {screenshot_path}, fullPage: true }});",
-                f"      stepResults.push({{ step: '{safe_step}', status: 'PASS' }});",
+                f"      stepResults.push({{ step: '{safe_step}', status: 'PASS', stepKind: '{step_kind}' }});",
                 "    } catch (e) {",
                 f"      console.error('Step failed: {safe_step}', e);",
                 "      await page.waitForTimeout(350);",
@@ -371,7 +371,7 @@ def _fallback_script(steps: list[str]) -> str:
                 f"      await page.screenshot({{ path: {screenshot_path}, fullPage: true }});",
                 (
                     f"      stepResults.push({{ step: '{safe_step}', status: 'FAIL', "
-                    "error: e.message });"
+                    f"error: e.message, stepKind: '{step_kind}' }});"
                 ),
                 "    }",
                 "  });",

@@ -63,6 +63,29 @@ def _normalize_comparison_label(regression: bool) -> str:
     return "Difference Found" if regression else "Match"
 
 
+def _should_compare_visuals(step_name: str, pre_entry: dict[str, Any], post_entry: dict[str, Any]) -> bool:
+    # Prefer explicit runtime step intent from generated script output.
+    pre_kind = str(pre_entry.get("stepKind") or "").strip().lower()
+    post_kind = str(post_entry.get("stepKind") or "").strip().lower()
+    step_kind = pre_kind or post_kind
+    if step_kind:
+        return step_kind == "verification"
+
+    # Safe fallback: only verification/assertion-style steps should use visual comparison.
+    lowered = str(step_name or "").strip().lower()
+    verification_tokens = (
+        "verify",
+        "should show",
+        "is visible",
+        "should be visible",
+        "validate",
+        "validation",
+        "check",
+        "assert",
+    )
+    return any(token in lowered for token in verification_tokens)
+
+
 class StateStepAgent(BaseAgent):
     """Small ADK agent that executes one deterministic workflow step."""
 
@@ -174,7 +197,10 @@ def _mark_completed_step(state: dict[str, Any]) -> None:
 
         has_status_mismatch = pre_status != post_status
         has_error_mismatch = pre_error != post_error
-        has_step_visual_regression = visual_delta is not None and visual_delta >= 0.08
+        consider_visual = _should_compare_visuals(step_name, pre_entry, post_entry)
+        has_step_visual_regression = (
+            consider_visual and visual_delta is not None and visual_delta >= 0.08
+        )
         step_regression = has_status_mismatch or has_error_mismatch or has_step_visual_regression
         comparison_status = "FAIL" if step_regression else "PASS"
 

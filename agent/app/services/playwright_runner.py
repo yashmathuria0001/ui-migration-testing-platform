@@ -68,6 +68,7 @@ def extract_step_results_from_stdout(stdout: str) -> list[dict[str, Any]]:
                     {
                         "stepName": item.get("step"),
                         "status": status if status in {"PASS", "FAIL"} else "FAIL",
+                        "stepKind": str(item.get("stepKind") or "").strip().lower() or "action",
                         "durationMs": None,
                         "errorMessage": error_message,
                         "timeout": "timeout" in lowered,

@@ -130,9 +130,9 @@ Runtime evidence:
 Return ONLY strict JSON:
 {{
   "comparisonLabel": "Match or Difference Found",
-  "exactChange": "1-2 plain sentences",
-  "detailedDifference": "3-5 plain sentences, no technical jargon",
-  "runtimeEvidence": "2-4 plain sentences explaining what was observed during run",
+  "exactChange": "2-4 plain sentences with explicit BEFORE vs AFTER difference in simple language",
+  "detailedDifference": "4-6 plain sentences describing exactly what changed and how user experience is affected",
+  "runtimeEvidence": "3-5 plain sentences describing concrete clues used to reach the conclusion",
   "detailedFix": "3-5 plain sentences with practical fix guidance when fail, else empty string"
 }}
 
@@ -142,6 +142,9 @@ Rules:
 - If comparisonStatus is FAIL: explain mismatch impact and provide actionable fix.
 - If comparisonStatus is PASS: clearly state behavior matched and keep detailedFix empty.
 - Keep wording consistent with verdict.
+- Do not write vague lines like "some difference exists".
+- For FAIL, must state an exact user-visible before/after difference based on provided runtime evidence.
+- If evidence is weak, clearly say what exact clue was missing instead of guessing.
 """
 
     try:
@@ -161,17 +164,28 @@ Rules:
     runtime_evidence = re.sub(r"\s+", " ", str(parsed.get("runtimeEvidence") or "").strip())
     detailed_fix = re.sub(r"\s+", " ", str(parsed.get("detailedFix") or "").strip())
 
-    if not exact_change or _contains_technical_terms(exact_change):
-        exact_change = _build_exact_change(step_name, pre_status, post_status, is_fail)
-    if not detailed_difference or _contains_technical_terms(detailed_difference):
-        detailed_difference = _build_plain_difference(step_name, pre_status, post_status, is_fail)
-    if not runtime_evidence or _contains_technical_terms(runtime_evidence):
-        runtime_evidence = _build_runtime_evidence(step_name, is_fail)
-
-    if is_fail:
-        if not detailed_fix or _contains_technical_terms(detailed_fix):
-            detailed_fix = _build_plain_fix(step_name, True)
-    else:
+    # Keep fallback minimal and neutral; normal output should come from LLM.
+    if not exact_change:
+        exact_change = (
+            "LLM could not produce exact before/after wording for this step. "
+            "Please rerun to regenerate analysis."
+        )
+    if not detailed_difference:
+        detailed_difference = (
+            "LLM could not produce detailed difference analysis for this step. "
+            "Please rerun to regenerate analysis."
+        )
+    if not runtime_evidence:
+        runtime_evidence = (
+            "LLM could not produce runtime evidence summary for this step. "
+            "Please rerun to regenerate analysis."
+        )
+    if is_fail and not detailed_fix:
+        detailed_fix = (
+            "LLM could not produce a fix recommendation for this failed step. "
+            "Please rerun to regenerate analysis."
+        )
+    if not is_fail:
         detailed_fix = ""
 
     return {
