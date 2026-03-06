@@ -12,6 +12,14 @@ def _put(path: str, payload: dict[str, Any] | None = None) -> None:
     requests.put(url, json=payload, timeout=20)
 
 
+def _get(path: str) -> dict[str, Any]:
+    url = f"{SPRING_BASE_URL}{path}"
+    response = requests.get(url, timeout=20)
+    response.raise_for_status()
+    data = response.json()
+    return data if isinstance(data, dict) else {}
+
+
 def mark_running(test_id: str) -> None:
     _put(f"/api/execution/{test_id}/start")
 
@@ -49,3 +57,11 @@ def mark_completed(
 
 def mark_failed(test_id: str, error_message: str) -> None:
     _put(f"/api/execution/{test_id}/fail", {"errorMessage": error_message})
+
+
+def fetch_credentials(test_id: str) -> dict[str, str]:
+    payload = _get(f"/api/agent/credentials/{test_id}")
+    return {
+        "username": str(payload.get("username") or "").strip(),
+        "password": str(payload.get("password") or "").strip(),
+    }

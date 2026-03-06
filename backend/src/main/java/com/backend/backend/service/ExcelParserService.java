@@ -1,6 +1,7 @@
 package com.backend.backend.service;
 
 import com.backend.backend.model.TestRun;
+import com.backend.backend.util.StepSanitizer;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.*;
 import org.springframework.stereotype.Service;
@@ -16,7 +17,12 @@ public class ExcelParserService {
 
     private final TestRunService testRunService;
 
-    public TestRun parseAndCreateTestRun(MultipartFile file, String preMigrationUrl, String postMigrationUrl) {
+    public TestRun parseAndCreateTestRun(
+            MultipartFile file,
+            String appId,
+            String appCredentials,
+            String preMigrationUrl,
+            String postMigrationUrl) {
 
         try (InputStream inputStream = file.getInputStream();
              Workbook workbook = WorkbookFactory.create(inputStream)) {
@@ -34,11 +40,16 @@ public class ExcelParserService {
                 String step = formatter.formatCellValue(row.getCell(0));
 
                 if (step != null && !step.isBlank()) {
-                    steps.add(step);
+                    String sanitized = StepSanitizer.sanitize(step);
+                    if (!sanitized.isBlank()) {
+                        steps.add(sanitized);
+                    }
                 }
             }
 
             TestRun testRun = new TestRun();
+            testRun.setAppId(appId);
+            testRun.setAppCredentials(appCredentials);
             testRun.setPreMigrationUrl(preMigrationUrl);
             testRun.setPostMigrationUrl(postMigrationUrl);
             testRun.setSteps(steps);

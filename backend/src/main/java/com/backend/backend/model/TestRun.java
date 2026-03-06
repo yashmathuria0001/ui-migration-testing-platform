@@ -20,6 +20,8 @@ public class TestRun {
 
     private String preMigrationUrl;
     private String postMigrationUrl;
+    private String appId;
+    private String appCredentials;
 
     private String status; // CREATED, RUNNING, COMPLETED, FAILED
 

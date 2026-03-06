@@ -10,11 +10,21 @@ from typing import Any
 from app.core.settings import BASE_DIR, PLAYWRIGHT_TIMEOUT_SECONDS
 
 
-def execute_playwright(script_file: Path, base_url: str, test_id: str, label: str) -> dict[str, Any]:
+def execute_playwright(
+    script_file: Path,
+    base_url: str,
+    test_id: str,
+    label: str,
+    *,
+    username: str = "",
+    password: str = "",
+) -> dict[str, Any]:
     env = os.environ.copy()
     env["BASE_URL"] = base_url
     env["TEST_RUN_ID"] = test_id
     env["RUN_LABEL"] = label
+    env["TEST_USERNAME"] = username
+    env["TEST_PASSWORD"] = password
 
     result = subprocess.run(
         ["npx", "playwright", "test", str(script_file), "--reporter=json"],

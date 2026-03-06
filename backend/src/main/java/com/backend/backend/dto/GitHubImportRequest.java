@@ -5,6 +5,8 @@ import java.util.List;
 
 @Data
 public class GitHubImportRequest {
+    private String appId;           // manual input from UI
+    private String appCredentials;  // manual input from UI
     private String repository;      // owner/repo
     private String filePath;        // path/to/input.json
     private String branch;          // optional, defaults to main

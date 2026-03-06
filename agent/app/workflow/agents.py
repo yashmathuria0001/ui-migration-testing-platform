@@ -14,12 +14,13 @@ from typing_extensions import override
 
 from app.core.logging_utils import log
 from app.core.settings import REPORTS_DIR, SCREENSHOTS_DIR
-from app.integrations.spring_client import mark_completed, mark_running
+from app.integrations.spring_client import fetch_credentials, mark_completed, mark_running
 from app.services.playwright_runner import execute_playwright, extract_structured_steps
 from app.services.regression_analysis import (
     analyze_regression,
     generate_overall_interpretation,
     generate_step_interpretation,
+    sanitize_user_visible_text,
 )
 from app.services.script_generation import generate_playwright_script
 
@@ -86,6 +87,13 @@ def _should_compare_visuals(step_name: str, pre_entry: dict[str, Any], post_entr
     return any(token in lowered for token in verification_tokens)
 
 
+def _is_sensitive_step(step_name: str) -> bool:
+    lowered = str(step_name or "").strip().lower()
+    username_markers = ("enter username", "fill username", "type username", "enter email")
+    password_markers = ("enter password", "fill password", "type password")
+    return any(marker in lowered for marker in username_markers + password_markers)
+
+
 class StateStepAgent(BaseAgent):
     """Small ADK agent that executes one deterministic workflow step."""
 
@@ -117,13 +125,29 @@ def _generate_script_step(state: dict[str, Any]) -> None:
     state["script_path"] = str(script_path)
 
 
+def _fetch_credentials_step(state: dict[str, Any]) -> None:
+    test_id = state["test_run_id"]
+    log(f"[{test_id}] Fetching credentials from backend")
+    credentials = fetch_credentials(test_id)
+    state["test_username"] = credentials.get("username", "")
+    state["test_password"] = credentials.get("password", "")
+
+
 def _pre_execution_step(state: dict[str, Any]) -> None:
     test_id = state["test_run_id"]
     log(f"[{test_id}] Running PRE execution")
     script_path = state["script_path"]
     artifact_run_id = str(state.get("artifact_run_id") or f"{test_id}_{state['start_time_ms']}")
     state["artifact_run_id"] = artifact_run_id
-    pre_result = execute_playwright(Path(script_path), state["pre_url"], artifact_run_id, "pre")
+    (SCREENSHOTS_DIR / "pre" / artifact_run_id).mkdir(parents=True, exist_ok=True)
+    pre_result = execute_playwright(
+        Path(script_path),
+        state["pre_url"],
+        artifact_run_id,
+        "pre",
+        username=str(state.get("test_username") or ""),
+        password=str(state.get("test_password") or ""),
+    )
     state["pre_result"] = pre_result
     state["pre_structured"] = pre_result.get("step_results") or extract_structured_steps(pre_result.get("report"))
 
@@ -134,7 +158,15 @@ def _post_execution_step(state: dict[str, Any]) -> None:
     script_path = state["script_path"]
     artifact_run_id = str(state.get("artifact_run_id") or f"{test_id}_{state['start_time_ms']}")
     state["artifact_run_id"] = artifact_run_id
-    post_result = execute_playwright(Path(script_path), state["post_url"], artifact_run_id, "post")
+    (SCREENSHOTS_DIR / "post" / artifact_run_id).mkdir(parents=True, exist_ok=True)
+    post_result = execute_playwright(
+        Path(script_path),
+        state["post_url"],
+        artifact_run_id,
+        "post",
+        username=str(state.get("test_username") or ""),
+        password=str(state.get("test_password") or ""),
+    )
     state["post_result"] = post_result
     state["post_structured"] = post_result.get("step_results") or extract_structured_steps(post_result.get("report"))
 
@@ -177,6 +209,9 @@ def _mark_completed_step(state: dict[str, Any]) -> None:
     behavior_mismatch_count = 0
 
     for index, step_name in enumerate(state.get("steps", []), start=1):
+        safe_step_name = sanitize_user_visible_text(step_name)
+        if _is_sensitive_step(safe_step_name):
+            continue
         pre_entry = pre_structured[index - 1] if index <= len(pre_structured) else {}
         post_entry = post_structured[index - 1] if index <= len(post_structured) else {}
         pre_status = str(pre_entry.get("status", "SKIPPED"))
@@ -190,14 +225,16 @@ def _mark_completed_step(state: dict[str, Any]) -> None:
 
         pre_rel = Path("pre") / artifact_run_id / f"step_{index}.png"
         post_rel = Path("post") / artifact_run_id / f"step_{index}.png"
+        pre_abs = SCREENSHOTS_DIR / pre_rel
+        post_abs = SCREENSHOTS_DIR / post_rel
         visual_delta = _compute_visual_delta(
-            SCREENSHOTS_DIR / pre_rel,
-            SCREENSHOTS_DIR / post_rel,
+            pre_abs,
+            post_abs,
         )
 
         has_status_mismatch = pre_status != post_status
         has_error_mismatch = pre_error != post_error
-        consider_visual = _should_compare_visuals(step_name, pre_entry, post_entry)
+        consider_visual = _should_compare_visuals(safe_step_name, pre_entry, post_entry)
         has_step_visual_regression = (
             consider_visual and visual_delta is not None and visual_delta >= 0.08
         )
@@ -210,7 +247,7 @@ def _mark_completed_step(state: dict[str, Any]) -> None:
             visual_regression_count += 1
 
         interpretation = generate_step_interpretation(
-            step_name=step_name,
+            step_name=safe_step_name,
             comparison_status=comparison_status,
             pre_status=pre_status,
             post_status=post_status,
@@ -218,17 +255,17 @@ def _mark_completed_step(state: dict[str, Any]) -> None:
             pre_error=pre_error or None,
             post_error=post_error or None,
             prior_difference_hint=(
-                str(ai_comparison.get("difference"))
+                sanitize_user_visible_text(str(ai_comparison.get("difference")))
                 if ai_comparison and ai_comparison.get("difference")
                 else None
             ),
             prior_runtime_evidence=(
-                str(ai_comparison.get("runtimeEvidence"))
+                sanitize_user_visible_text(str(ai_comparison.get("runtimeEvidence")))
                 if ai_comparison and ai_comparison.get("runtimeEvidence")
                 else None
             ),
             prior_fix_hint=(
-                str(ai_comparison.get("recommendedFix"))
+                sanitize_user_visible_text(str(ai_comparison.get("recommendedFix")))
                 if ai_comparison and ai_comparison.get("recommendedFix")
                 else None
             ),
@@ -246,19 +283,19 @@ def _mark_completed_step(state: dict[str, Any]) -> None:
 
         step_results.append(
             {
-                "stepName": step_name,
+                "stepName": safe_step_name,
                 "preStatus": pre_status,
                 "postStatus": post_status,
                 "comparisonStatus": comparison_status,
                 "comparisonLabel": ai_comparison_label,
-                "difference": difference,
-                "exactChange": ai_exact_change,
-                "detailedDifference": ai_detailed_difference,
-                "runtimeEvidence": ai_runtime_evidence,
-                "detailedFix": ai_detailed_fix,
+                "difference": sanitize_user_visible_text(difference),
+                "exactChange": sanitize_user_visible_text(ai_exact_change),
+                "detailedDifference": sanitize_user_visible_text(ai_detailed_difference),
+                "runtimeEvidence": sanitize_user_visible_text(ai_runtime_evidence),
+                "detailedFix": sanitize_user_visible_text(ai_detailed_fix),
                 "regression": step_regression,
-                "preScreenshotPath": f"/screenshots/{pre_rel.as_posix()}",
-                "postScreenshotPath": f"/screenshots/{post_rel.as_posix()}",
+                "preScreenshotPath": f"/screenshots/{pre_rel.as_posix()}" if pre_abs.exists() else None,
+                "postScreenshotPath": f"/screenshots/{post_rel.as_posix()}" if post_abs.exists() else None,
             }
         )
 
@@ -346,6 +383,7 @@ def build_workflow_agent() -> SequentialAgent:
         sub_agents=[
             StateStepAgent(name="mark_running", description="Marks run as RUNNING", handler=_mark_running_step),
             StateStepAgent(name="generate_script", description="Generates Playwright script", handler=_generate_script_step),
+            StateStepAgent(name="fetch_credentials", description="Fetches credentials from backend", handler=_fetch_credentials_step),
             StateStepAgent(name="execute_pre", description="Runs pre-migration execution", handler=_pre_execution_step),
             StateStepAgent(name="execute_post", description="Runs post-migration execution", handler=_post_execution_step),
             StateStepAgent(name="analyze_regression", description="Computes AI regression summary", handler=_regression_analysis_step),

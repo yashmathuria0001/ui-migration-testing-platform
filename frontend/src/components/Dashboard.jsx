@@ -9,6 +9,7 @@ import {
   X,
   Image as ImageIcon,
 } from 'lucide-react';
+import { maskSensitiveText } from '../utils/redaction';
 import './Dashboard.css';
 
 const BACKEND_BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL || 'http://localhost:8000';
@@ -221,7 +222,7 @@ export default function Dashboard() {
               <section className="drawer-section">
                 <h4>AI Explanation</h4>
                 <p className="explanation">
-                  {selectedRun.aiExplanation || selectedRun.errorMessage || 'No explanation available.'}
+                  {maskSensitiveText(selectedRun.aiExplanation || selectedRun.errorMessage || 'No explanation available.')}
                 </p>
               </section>
 
@@ -240,8 +241,8 @@ export default function Dashboard() {
                   <ul className="failed-tests-list">
                     {failedTests(selectedRun).map((r, i) => (
                       <li key={i}>
-                        <strong>{r.stepName}</strong> — Comparison: {r.comparisonLabel || (String(r.comparisonStatus || '').toUpperCase() === 'PASS' ? 'Match' : 'Difference Found')}
-                        {r.difference && <div className="diff">{r.difference}</div>}
+                        <strong>{maskSensitiveText(r.stepName)}</strong> — Comparison: {r.comparisonLabel || (String(r.comparisonStatus || '').toUpperCase() === 'PASS' ? 'Match' : 'Difference Found')}
+                        {r.difference && <div className="diff">{maskSensitiveText(r.difference)}</div>}
                       </li>
                     ))}
                   </ul>

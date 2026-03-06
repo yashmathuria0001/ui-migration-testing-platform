@@ -13,6 +13,7 @@ import {
   FileSpreadsheet,
   Github,
 } from 'lucide-react';
+import { maskSensitiveText } from '../utils/redaction';
 
 const BACKEND_BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL || 'http://localhost:8000';
 const AGENT_ASSET_BASE_URL = import.meta.env.VITE_AGENT_ASSET_BASE_URL || 'http://localhost:5000';
@@ -61,7 +62,7 @@ function getOverallAnalysis(report) {
 
 function getAgentAnalysisText(value, fallback = 'Not provided by agent.') {
   const cleaned = String(value || '').replace(/\s+/g, ' ').trim();
-  return cleaned || fallback;
+  return maskSensitiveText(cleaned || fallback);
 }
 
 export default function NewTest() {
@@ -81,6 +82,30 @@ export default function NewTest() {
   const [error, setError] = useState(null);
   const [stages, setStages] = useState(initialStages);
   const [backendStatus, setBackendStatus] = useState('IDLE');
+  const sanitizedImportedSteps = useMemo(
+    () => (jsonSteps || []).map((step) => maskSensitiveText(step)).filter((step) => String(step || '').trim()),
+    [jsonSteps],
+  );
+  const importTypeMeta = useMemo(() => ({
+    excel: {
+      tabLabel: 'Excel (Test Steps)',
+      importHeading: 'Import Excel Test Steps',
+      picker: 'Choose EXCEL file',
+      detected: 'Excel',
+    },
+    json: {
+      tabLabel: 'JSON (URLs + Test Steps)',
+      importHeading: 'Import JSON URLs + Test Steps',
+      picker: 'Choose JSON file',
+      detected: 'JSON',
+    },
+    github: {
+      tabLabel: 'GitHub Repository',
+      importHeading: 'Import GitHub Testcase',
+      picker: '',
+      detected: 'GitHub',
+    },
+  }), []);
 
   const stageIntervalRef = useRef(null);
 
@@ -142,16 +167,14 @@ export default function NewTest() {
     if (importType === 'json') {
       try {
         const parsed = JSON.parse(await f.text());
-        const nextAppId = typeof parsed.appId === 'string' ? parsed.appId : '';
-        const nextAppCredentials = typeof parsed.appCredentials === 'string' ? parsed.appCredentials : '';
         const nextPre = typeof parsed.preMigrationUrl === 'string' ? parsed.preMigrationUrl : '';
         const nextPost = typeof parsed.postMigrationUrl === 'string' ? parsed.postMigrationUrl : '';
         const nextSteps = Array.isArray(parsed.steps)
-          ? parsed.steps.filter((s) => typeof s === 'string' && s.trim())
+          ? parsed.steps
+            .filter((s) => typeof s === 'string' && s.trim())
+            .map((s) => maskSensitiveText(s))
           : [];
 
-        if (nextAppId) setAppId(nextAppId);
-        if (nextAppCredentials) setAppCredentials(nextAppCredentials);
         if (nextPre) setPreUrl(nextPre);
         if (nextPost) setPostUrl(nextPost);
         setJsonSteps(nextSteps);
@@ -228,16 +251,12 @@ export default function NewTest() {
           }
         }
 
-        const nextAppId = findMetaValue('appId');
-        const nextAppCredentials = findMetaValue('appCredentials');
         const nextPre = findMetaValue('preMigrationUrl');
         const nextPost = findMetaValue('postMigrationUrl');
 
-        if (nextAppId) setAppId(nextAppId);
-        if (nextAppCredentials) setAppCredentials(nextAppCredentials);
         if (nextPre) setPreUrl(nextPre);
         if (nextPost) setPostUrl(nextPost);
-        setJsonSteps(steps);
+        setJsonSteps(steps.map((step) => maskSensitiveText(step)));
       } catch {
         setError('Invalid Excel file. Use .xlsx/.xls with a step column and optional metadata fields.');
       }
@@ -287,7 +306,7 @@ export default function NewTest() {
 
   const runTest = async () => {
     if (!appId.trim() || !appCredentials.trim()) {
-      setError('Please provide App ID and App Credentials before running security checks.');
+      setError('Please enter App ID and App Password manually.');
       return;
     }
     if (!preUrl || !postUrl) {
@@ -298,7 +317,7 @@ export default function NewTest() {
       setError('Please upload an Excel file.');
       return;
     }
-    if (importType === 'json' && (!file || jsonSteps.length === 0)) {
+    if (importType === 'json' && (!file || sanitizedImportedSteps.length === 0)) {
       setError('Please upload a JSON test case that includes steps.');
       return;
     }
@@ -320,6 +339,8 @@ export default function NewTest() {
       if (importType === 'excel') {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('appId', appId.trim());
+        formData.append('appCredentials', appCredentials);
         formData.append('preMigrationUrl', preUrl);
         formData.append('postMigrationUrl', postUrl);
 
@@ -329,13 +350,17 @@ export default function NewTest() {
         testRunId = uploadRes.data.id;
       } else if (importType === 'json') {
         const createRes = await api.post('/testruns/create', {
+          appId: appId.trim(),
+          appCredentials,
           preMigrationUrl: preUrl,
           postMigrationUrl: postUrl,
-          steps: jsonSteps,
+          steps: sanitizedImportedSteps,
         });
         testRunId = createRes.data.id;
       } else {
         const githubRes = await api.post('/testruns/github', {
+          appId: appId.trim(),
+          appCredentials,
           repository: githubRepository.trim(),
           filePath: githubFilePath.trim(),
           branch: githubBranch.trim() || 'main',
@@ -404,7 +429,7 @@ export default function NewTest() {
       <div className="new-test-grid">
         <section className="panel card soft">
           <h3>Run Configuration</h3>
-          <div className="import-toggle" role="tablist" aria-label="Import Type">
+          <div className="import-toggle" role="tablist" aria-label="Test Steps Import Source">
             <button
               type="button"
               className={importType === 'excel' ? 'active' : ''}
@@ -414,7 +439,7 @@ export default function NewTest() {
                 setJsonSteps([]);
               }}
             >
-              <FileSpreadsheet size={16} /> Excel
+              <FileSpreadsheet size={16} /> {importTypeMeta.excel.tabLabel}
             </button>
             <button
               type="button"
@@ -425,7 +450,7 @@ export default function NewTest() {
                 setJsonSteps([]);
               }}
             >
-              <FileJson size={16} /> JSON
+              <FileJson size={16} /> {importTypeMeta.json.tabLabel}
             </button>
             <button
               type="button"
@@ -436,26 +461,27 @@ export default function NewTest() {
                 setJsonSteps([]);
               }}
             >
-              <Github size={16} /> GitHub Repo
+              <Github size={16} /> {importTypeMeta.github.tabLabel}
             </button>
           </div>
+          <p className="muted">Excel imports test steps, JSON imports URLs and steps, and GitHub imports a testcase file from your repository.</p>
 
           <div className="form-stack">
             <label>
               App ID
               <input
                 type="text"
-                placeholder="Enter application ID"
+                placeholder="Enter app ID / username"
                 value={appId}
                 onChange={(e) => setAppId(e.target.value)}
               />
             </label>
 
             <label>
-              App Credentials
+              App Password
               <input
                 type="password"
-                placeholder="Enter application credentials"
+                placeholder="Enter app password"
                 value={appCredentials}
                 onChange={(e) => setAppCredentials(e.target.value)}
               />
@@ -483,7 +509,7 @@ export default function NewTest() {
 
             {importType !== 'github' && (
               <label>
-                Test File ({importType.toUpperCase()})
+                {importTypeMeta[importType].importHeading}
                 <div className="file-input-wrap">
                   <input
                     id="case-file"
@@ -493,7 +519,7 @@ export default function NewTest() {
                   />
                   <label htmlFor="case-file" className="file-pick">
                     <Upload size={16} />
-                    {file ? file.name : `Choose ${importType.toUpperCase()} file`}
+                    {file ? file.name : importTypeMeta[importType].picker}
                   </label>
                 </div>
               </label>
@@ -540,8 +566,8 @@ export default function NewTest() {
               </>
             )}
 
-            {(importType === 'json' || importType === 'excel') && jsonSteps.length > 0 && (
-              <p className="muted">Detected {jsonSteps.length} steps from {importType.toUpperCase()}.</p>
+            {(importType === 'json' || importType === 'excel') && sanitizedImportedSteps.length > 0 && (
+              <p className="muted">Detected {sanitizedImportedSteps.length} test steps from {importTypeMeta[importType].detected} import.</p>
             )}
 
             <button className="primary-run" onClick={runTest} disabled={loading}>
@@ -647,6 +673,7 @@ export default function NewTest() {
 
           <div className="step-report-grid">
             {(report.results || []).map((result, index) => {
+              const displayStepName = maskSensitiveText(result?.stepName || '');
               const comparisonStatus =
                 String(result?.comparisonStatus || '').toUpperCase() ||
                 (result?.preStatus === result?.postStatus ? 'PASS' : 'FAIL');
@@ -668,7 +695,7 @@ export default function NewTest() {
                   <header>
                     <div>
                       <span className="step-count">Step {index + 1}</span>
-                      <h4>{result.stepName}</h4>
+                      <h4>{displayStepName}</h4>
                     </div>
                     <div className="pair-status">
                       <span className={comparisonStatus === 'PASS' ? 'pass' : 'fail'}>
@@ -681,7 +708,7 @@ export default function NewTest() {
                     <div className="shot-box">
                       <label>Before Update</label>
                       {result.preScreenshotPath ? (
-                        <img src={resolveAgentAssetUrl(result.preScreenshotPath, report.executionEndTime)} alt={`Pre ${result.stepName}`} loading="lazy" />
+                        <img src={resolveAgentAssetUrl(result.preScreenshotPath, report.executionEndTime)} alt={`Pre ${displayStepName}`} loading="lazy" />
                       ) : (
                         <div className="shot-empty"><ImageIcon size={18} /> No image</div>
                       )}
@@ -690,7 +717,7 @@ export default function NewTest() {
                     <div className="shot-box">
                       <label>After Update</label>
                       {result.postScreenshotPath ? (
-                        <img src={resolveAgentAssetUrl(result.postScreenshotPath, report.executionEndTime)} alt={`Post ${result.stepName}`} loading="lazy" />
+                        <img src={resolveAgentAssetUrl(result.postScreenshotPath, report.executionEndTime)} alt={`Post ${displayStepName}`} loading="lazy" />
                       ) : (
                         <div className="shot-empty"><ImageIcon size={18} /> No image</div>
                       )}

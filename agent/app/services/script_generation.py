@@ -33,7 +33,8 @@ Rules:
 5. On step failure, log and continue.
 6. Save screenshots to `screenshots/${{process.env.RUN_LABEL}}/${{process.env.TEST_RUN_ID}}/step_<number>.png`.
 7. Print final JSON with `console.log('STEP_RESULTS:', JSON.stringify(stepResults));`.
-8. Return only JavaScript code.
+8. For login actions, use `process.env.TEST_USERNAME` and `process.env.TEST_PASSWORD`; never hardcode credentials.
+9. Return only JavaScript code.
 
 Steps:
 {steps}
@@ -143,7 +144,8 @@ def _fallback_script(steps: list[str]) -> str:
         "}",
         "",
         "async function fillUsername(page) {",
-        "  const value = 'demo.user@example.com';",
+        "  const value = process.env.TEST_USERNAME || '';",
+        "  if (!value) throw new Error('TEST_USERNAME is missing');",
         "  const locators = [",
         "    page.getByRole('textbox', { name: /username|user name|user|email|login/i }),",
         "    page.getByLabel(/username|user name|user|email|login/i),",
@@ -159,7 +161,8 @@ def _fallback_script(steps: list[str]) -> str:
         "}",
         "",
         "async function fillPassword(page) {",
-        "  const value = 'Pass@12345';",
+        "  const value = process.env.TEST_PASSWORD || '';",
+        "  if (!value) throw new Error('TEST_PASSWORD is missing');",
         "  const locators = [",
         "    page.getByLabel(/password|pass/i),",
         "    page.getByPlaceholder(/password|pass/i),",

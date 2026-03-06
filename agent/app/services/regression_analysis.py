@@ -40,6 +40,53 @@ def _contains_technical_terms(text: str) -> bool:
     return any(marker in lowered for marker in technical_markers)
 
 
+_EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+_GENERIC_ASSIGNMENT_RE = re.compile(r"\b([A-Za-z][\w.-]{1,40})\b(\s*(?:=|:|is|was)\s*)(\"[^\"]+\"|'[^']+'|`[^`]+`|[^\s,.;:!?]+)")
+_ACTION_TAIL_RE = re.compile(r"(?i)\b(enter|fill|type|input|provide)\b([^\n]*?)\s+([^\s,.;:!?]+)")
+_QUOTED_VALUE_RE = re.compile(r"([\"'`])([^\"'`\n]{4,})\1")
+
+
+def _looks_secret_like(token: str) -> bool:
+    candidate = str(token or "").strip().strip("`'\"")
+    if len(candidate) < 6:
+        return False
+    if " " in candidate:
+        return False
+    has_alpha = any(ch.isalpha() for ch in candidate)
+    has_digit = any(ch.isdigit() for ch in candidate)
+    has_special = any(not ch.isalnum() for ch in candidate)
+    return (has_alpha and has_digit) or has_special
+
+
+def sanitize_user_visible_text(text: str) -> str:
+    value = str(text or "")
+    if not value:
+        return ""
+
+    value = _EMAIL_RE.sub("", value)
+    value = _GENERIC_ASSIGNMENT_RE.sub(
+        lambda m: (
+            f"{m.group(1)}{m.group(2).strip()}"
+            if _looks_secret_like(m.group(3))
+            else m.group(0)
+        ),
+        value,
+    )
+    value = _ACTION_TAIL_RE.sub(
+        lambda m: (
+            f"{m.group(1)}{m.group(2)}"
+            if _looks_secret_like(m.group(3)) or "@" in m.group(3)
+            else m.group(0)
+        ),
+        value,
+    )
+    value = _QUOTED_VALUE_RE.sub(
+        lambda m: "" if _looks_secret_like(m.group(2)) else m.group(0),
+        value,
+    )
+    return re.sub(r"\s{2,}", " ", value).strip()
+
+
 def _build_plain_difference(step_name: str, pre_status: str, post_status: str, regression: bool) -> str:
     if regression:
         return (
@@ -101,6 +148,13 @@ def generate_step_interpretation(
     prior_runtime_evidence: str | None,
     prior_fix_hint: str | None,
 ) -> dict[str, str]:
+    safe_step_name = sanitize_user_visible_text(step_name)
+    safe_prior_difference_hint = sanitize_user_visible_text(prior_difference_hint or "")
+    safe_prior_runtime_evidence = sanitize_user_visible_text(prior_runtime_evidence or "")
+    safe_prior_fix_hint = sanitize_user_visible_text(prior_fix_hint or "")
+    safe_pre_error = sanitize_user_visible_text(pre_error or "")
+    safe_post_error = sanitize_user_visible_text(post_error or "")
+
     is_fail = str(comparison_status).upper() == "FAIL"
     label = "Difference Found" if is_fail else "Match"
     visual_summary = (
@@ -117,15 +171,15 @@ Verdict is fixed and must not be changed:
 - comparisonLabel: {label}
 
 Runtime evidence:
-- stepName: {step_name}
+- stepName: {safe_step_name}
 - preStatus: {pre_status}
 - postStatus: {post_status}
 - visualObservation: {visual_summary}
-- preError: {pre_error or ""}
-- postError: {post_error or ""}
-- priorDifferenceHint: {prior_difference_hint or ""}
-- priorRuntimeEvidenceHint: {prior_runtime_evidence or ""}
-- priorFixHint: {prior_fix_hint or ""}
+- preError: {safe_pre_error}
+- postError: {safe_post_error}
+- priorDifferenceHint: {safe_prior_difference_hint}
+- priorRuntimeEvidenceHint: {safe_prior_runtime_evidence}
+- priorFixHint: {safe_prior_fix_hint}
 
 Return ONLY strict JSON:
 {{
@@ -159,10 +213,18 @@ Rules:
     except Exception:
         parsed = {}
 
-    exact_change = re.sub(r"\s+", " ", str(parsed.get("exactChange") or "").strip())
-    detailed_difference = re.sub(r"\s+", " ", str(parsed.get("detailedDifference") or "").strip())
-    runtime_evidence = re.sub(r"\s+", " ", str(parsed.get("runtimeEvidence") or "").strip())
-    detailed_fix = re.sub(r"\s+", " ", str(parsed.get("detailedFix") or "").strip())
+    exact_change = sanitize_user_visible_text(
+        re.sub(r"\s+", " ", str(parsed.get("exactChange") or "").strip())
+    )
+    detailed_difference = sanitize_user_visible_text(
+        re.sub(r"\s+", " ", str(parsed.get("detailedDifference") or "").strip())
+    )
+    runtime_evidence = sanitize_user_visible_text(
+        re.sub(r"\s+", " ", str(parsed.get("runtimeEvidence") or "").strip())
+    )
+    detailed_fix = sanitize_user_visible_text(
+        re.sub(r"\s+", " ", str(parsed.get("detailedFix") or "").strip())
+    )
 
     # Keep fallback minimal and neutral; normal output should come from LLM.
     if not exact_change:
@@ -205,6 +267,17 @@ def generate_overall_interpretation(
     total_steps: int,
     step_summaries: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    safe_step_summaries = [
+        {
+            "stepName": sanitize_user_visible_text(str(item.get("stepName") or "")),
+            "comparisonStatus": str(item.get("comparisonStatus") or ""),
+            "comparisonLabel": sanitize_user_visible_text(str(item.get("comparisonLabel") or "")),
+            "exactChange": sanitize_user_visible_text(str(item.get("exactChange") or "")),
+            "detailedDifference": sanitize_user_visible_text(str(item.get("detailedDifference") or "")),
+        }
+        for item in step_summaries
+    ]
+
     prompt = f"""
 You are summarizing a UI migration comparison for a non-technical tester.
 
@@ -213,7 +286,7 @@ Facts:
 - behaviorMismatchCount: {behavior_mismatch_count}
 - visualMismatchCount: {visual_mismatch_count}
 - totalSteps: {total_steps}
-- stepSummaries: {json.dumps(step_summaries, ensure_ascii=True)}
+- stepSummaries: {json.dumps(safe_step_summaries, ensure_ascii=True)}
 
 Return ONLY strict JSON:
 {{
@@ -305,7 +378,9 @@ Rules:
         risk_score = int(fallback["riskScore"])
     risk_score = max(0, min(100, risk_score))
 
-    ai_explanation = re.sub(r"\s+", " ", str(parsed.get("aiExplanation") or fallback["aiExplanation"]).strip())
+    ai_explanation = sanitize_user_visible_text(
+        re.sub(r"\s+", " ", str(parsed.get("aiExplanation") or fallback["aiExplanation"]).strip())
+    )
     if not ai_explanation or _contains_technical_terms(ai_explanation):
         ai_explanation = fallback["aiExplanation"]
 
@@ -314,8 +389,9 @@ Rules:
 
     def _clean_text(value: Any, default: str) -> str:
         cleaned_value = re.sub(r"\s+", " ", str(value or "").strip())
+        cleaned_value = sanitize_user_visible_text(cleaned_value)
         if not cleaned_value or _contains_technical_terms(cleaned_value):
-            return default
+            return sanitize_user_visible_text(default)
         return cleaned_value
 
     def _clean_list(value: Any, default: list[str]) -> list[str]:
@@ -352,6 +428,24 @@ def analyze_regression(
     pre_results: list[dict[str, Any]],
     post_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    safe_steps = [sanitize_user_visible_text(step) for step in steps]
+    safe_pre_results = [
+        {
+            **item,
+            "name": sanitize_user_visible_text(str(item.get("name") or "")),
+            "errorMessage": sanitize_user_visible_text(str(item.get("errorMessage") or "")),
+        }
+        for item in pre_results
+    ]
+    safe_post_results = [
+        {
+            **item,
+            "name": sanitize_user_visible_text(str(item.get("name") or "")),
+            "errorMessage": sanitize_user_visible_text(str(item.get("errorMessage") or "")),
+        }
+        for item in post_results
+    ]
+
     prompt = f"""
 You are a senior QA regression analyst writing for non-technical business users.
 
@@ -389,13 +483,13 @@ Writing style rules:
 - Do not include markdown. Return only valid JSON.
 
 Steps:
-{json.dumps(steps, indent=2)}
+{json.dumps(safe_steps, indent=2)}
 
 PRE RESULTS:
-{json.dumps(pre_results, indent=2)}
+{json.dumps(safe_pre_results, indent=2)}
 
 POST RESULTS:
-{json.dumps(post_results, indent=2)}
+{json.dumps(safe_post_results, indent=2)}
 """
 
     try:
@@ -410,7 +504,7 @@ POST RESULTS:
     except Exception:
         fallback_steps: list[dict[str, Any]] = []
         regression_found = False
-        for idx, step in enumerate(steps):
+        for idx, step in enumerate(safe_steps):
             pre_status = str(pre_results[idx].get("status") if idx < len(pre_results) else "UNKNOWN")
             post_status = str(post_results[idx].get("status") if idx < len(post_results) else "UNKNOWN")
             regression = pre_status != post_status or pre_status == "FAIL" or post_status == "FAIL"
@@ -446,7 +540,7 @@ POST RESULTS:
         parsed["aiExplanation"] = "No regression detected" if not parsed.get("regressionDetected") else "Regression detected"
 
     normalized = []
-    for idx, step in enumerate(steps):
+    for idx, step in enumerate(safe_steps):
         item = parsed.get("stepComparisons", [])[idx] if idx < len(parsed.get("stepComparisons", [])) else {}
         pre_status = str(item.get("preStatus") or (pre_results[idx].get("status") if idx < len(pre_results) else "UNKNOWN"))
         post_status = str(item.get("postStatus") or (post_results[idx].get("status") if idx < len(post_results) else "UNKNOWN"))
@@ -470,11 +564,14 @@ POST RESULTS:
             runtime_evidence = _build_runtime_evidence(step, regression)
 
         # Enforce concise non-technical wording even if model returns noisy content.
-        difference = re.sub(r"\s+", " ", difference).strip()
+        difference = sanitize_user_visible_text(re.sub(r"\s+", " ", difference).strip())
+        recommended_fix = sanitize_user_visible_text(recommended_fix)
+        exact_change = sanitize_user_visible_text(exact_change)
+        runtime_evidence = sanitize_user_visible_text(runtime_evidence)
 
         normalized.append(
             {
-                "stepName": str(item.get("stepName") or step),
+                "stepName": sanitize_user_visible_text(str(item.get("stepName") or step)),
                 "preStatus": pre_status,
                 "postStatus": post_status,
                 "comparisonLabel": str(item.get("comparisonLabel") or ("Difference Found" if regression else "Match")),

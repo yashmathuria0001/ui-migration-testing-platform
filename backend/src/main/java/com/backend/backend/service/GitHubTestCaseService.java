@@ -2,6 +2,7 @@ package com.backend.backend.service;
 
 import com.backend.backend.dto.GitHubImportRequest;
 import com.backend.backend.model.TestRun;
+import com.backend.backend.util.StepSanitizer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.json.JsonParser;
 import org.springframework.boot.json.JsonParserFactory;
@@ -22,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -49,6 +51,10 @@ public class GitHubTestCaseService {
                 }
             }
         }
+        steps = steps.stream()
+                .map(StepSanitizer::sanitize)
+                .filter(step -> !step.isBlank())
+                .collect(Collectors.toList());
         if (steps.isEmpty()) {
             throw new RuntimeException("No valid steps found. Provide steps[] in GitHub file or request body.");
         }
@@ -60,6 +66,8 @@ public class GitHubTestCaseService {
         }
 
         TestRun run = new TestRun();
+        run.setAppId(request.getAppId());
+        run.setAppCredentials(request.getAppCredentials());
         run.setPreMigrationUrl(preUrl);
         run.setPostMigrationUrl(postUrl);
         run.setSteps(steps);
@@ -179,7 +187,10 @@ public class GitHubTestCaseService {
         List<String> steps = new ArrayList<>();
         for (Object item : rawList) {
             if (item instanceof String step && !step.trim().isEmpty()) {
-                steps.add(step.trim());
+                String sanitized = StepSanitizer.sanitize(step);
+                if (!sanitized.isBlank()) {
+                    steps.add(sanitized);
+                }
             }
         }
         return steps;
@@ -193,7 +204,10 @@ public class GitHubTestCaseService {
         Matcher stepMatcher = stepPattern.matcher(body);
         while (stepMatcher.find()) {
             String title = stepMatcher.group(1).trim();
-            if (!title.isEmpty()) steps.add(title);
+            if (!title.isEmpty()) {
+                String sanitized = StepSanitizer.sanitize(title);
+                if (!sanitized.isEmpty()) steps.add(sanitized);
+            }
         }
 
         // Alternate: explicit inline comments (// STEP: ...)
@@ -201,7 +215,10 @@ public class GitHubTestCaseService {
         Matcher commentMatcher = commentPattern.matcher(body);
         while (commentMatcher.find()) {
             String comment = commentMatcher.group(1).trim();
-            if (!comment.isEmpty()) steps.add(comment);
+            if (!comment.isEmpty()) {
+                String sanitized = StepSanitizer.sanitize(comment);
+                if (!sanitized.isEmpty()) steps.add(sanitized);
+            }
         }
 
         // Fallback heuristic from common Playwright actions
