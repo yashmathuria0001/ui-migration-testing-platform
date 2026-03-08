@@ -68,6 +68,7 @@ function getAgentAnalysisText(value, fallback = 'Not provided by agent.') {
 export default function NewTest() {
   const [appId, setAppId] = useState('');
   const [appCredentials, setAppCredentials] = useState('');
+  const [additionalContext, setAdditionalContext] = useState('');
   const [preUrl, setPreUrl] = useState('');
   const [postUrl, setPostUrl] = useState('');
   const [importType, setImportType] = useState('excel');
@@ -88,13 +89,13 @@ export default function NewTest() {
   );
   const importTypeMeta = useMemo(() => ({
     excel: {
-      tabLabel: 'Excel (Test Steps)',
+      tabLabel: 'Excel',
       importHeading: 'Import Excel Test Steps',
       picker: 'Choose EXCEL file',
       detected: 'Excel',
     },
     json: {
-      tabLabel: 'JSON (URLs + Test Steps)',
+      tabLabel: 'JSON',
       importHeading: 'Import JSON URLs + Test Steps',
       picker: 'Choose JSON file',
       detected: 'JSON',
@@ -418,57 +419,60 @@ export default function NewTest() {
 
   return (
     <div className="new-test-page">
-      <section className="hero-banner">
+      {/* <section className="hero-banner">
         <div className="hero-top-bar" />
         <div className="hero-content">
           <h2>SmartParity Test Studio</h2>
           <p>Run migration checks from Excel or JSON, follow simple execution stages, and review human-friendly comparison insights.</p>
         </div>
-      </section>
+      </section> */}
 
       <div className="new-test-grid">
         <section className="panel card soft">
           <h3>Run Configuration</h3>
-          <div className="import-toggle" role="tablist" aria-label="Test Steps Import Source">
-            <button
-              type="button"
-              className={importType === 'excel' ? 'active' : ''}
-              onClick={() => {
-                setImportType('excel');
-                setFile(null);
-                setJsonSteps([]);
-              }}
-            >
-              <FileSpreadsheet size={16} /> {importTypeMeta.excel.tabLabel}
-            </button>
-            <button
-              type="button"
-              className={importType === 'json' ? 'active' : ''}
-              onClick={() => {
-                setImportType('json');
-                setFile(null);
-                setJsonSteps([]);
-              }}
-            >
-              <FileJson size={16} /> {importTypeMeta.json.tabLabel}
-            </button>
-            <button
-              type="button"
-              className={importType === 'github' ? 'active' : ''}
-              onClick={() => {
-                setImportType('github');
-                setFile(null);
-                setJsonSteps([]);
-              }}
-            >
-              <Github size={16} /> {importTypeMeta.github.tabLabel}
-            </button>
+          <div className="test-step-group">
+            <p className="test-step-heading">Test Steps</p>
+            <div className="import-toggle" role="tablist" aria-label="Test Steps Import Source">
+              <button
+                type="button"
+                className={importType === 'excel' ? 'active' : ''}
+                onClick={() => {
+                  setImportType('excel');
+                  setFile(null);
+                  setJsonSteps([]);
+                }}
+              >
+                <FileSpreadsheet size={16} /> {importTypeMeta.excel.tabLabel}
+              </button>
+              <button
+                type="button"
+                className={importType === 'json' ? 'active' : ''}
+                onClick={() => {
+                  setImportType('json');
+                  setFile(null);
+                  setJsonSteps([]);
+                }}
+              >
+                <FileJson size={16} /> {importTypeMeta.json.tabLabel}
+              </button>
+              <button
+                type="button"
+                className={importType === 'github' ? 'active' : ''}
+                onClick={() => {
+                  setImportType('github');
+                  setFile(null);
+                  setJsonSteps([]);
+                }}
+              >
+                <Github size={16} /> {importTypeMeta.github.tabLabel}
+              </button>
+            </div>
           </div>
           <p className="muted">Excel imports test steps, JSON imports URLs and steps, and GitHub imports a testcase file from your repository.</p>
 
           <div className="form-stack">
             <label>
-              App ID
+              App Username
               <input
                 type="text"
                 placeholder="Enter app ID / username"
@@ -491,7 +495,7 @@ export default function NewTest() {
               PRE Migration URL
               <input
                 type="text"
-                placeholder="http://localhost:3000"
+                placeholder="http://localhost:3000/"
                 value={preUrl}
                 onChange={(e) => setPreUrl(e.target.value)}
               />
@@ -501,9 +505,19 @@ export default function NewTest() {
               POST Migration URL
               <input
                 type="text"
-                placeholder="http://localhost:3001"
+                placeholder="http://localhost:3001/"
                 value={postUrl}
                 onChange={(e) => setPostUrl(e.target.value)}
+              />
+            </label>
+
+            <label>
+              Additional Context
+              <input
+                type="text"
+                placeholder="Add optional context for this run"
+                value={additionalContext}
+                onChange={(e) => setAdditionalContext(e.target.value)}
               />
             </label>
 

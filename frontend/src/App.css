@@ -81,6 +81,19 @@ body {
   color: #2f3135;
 }
 
+.test-step-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.test-step-heading {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #3a3f45;
+}
+
 .import-toggle {
   display: inline-grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
