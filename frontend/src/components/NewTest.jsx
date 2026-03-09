@@ -705,7 +705,10 @@ export default function NewTest() {
                 : getAgentAnalysisText(result?.detailedFix, 'No fix required for this step.');
 
               return (
-                <article className="step-report-card" key={`${result.stepName}-${index}`}>
+                <article
+                  className={`step-report-card ${comparisonStatus === 'PASS' ? 'match-card' : 'diff-card'}`}
+                  key={`${result.stepName}-${index}`}
+                >
                   <header>
                     <div>
                       <span className="step-count">Step {index + 1}</span>

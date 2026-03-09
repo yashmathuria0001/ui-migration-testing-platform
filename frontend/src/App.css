@@ -473,6 +473,16 @@ body {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
+.step-report-card.match-card {
+  border-color: #b8dfc6;
+  background: linear-gradient(180deg, #f5fcf7 0%, #eef8f1 100%);
+}
+
+.step-report-card.diff-card {
+  border-color: #efc0c4;
+  background: linear-gradient(180deg, #fff7f7 0%, #fff0f1 100%);
+}
+
 .step-report-card:hover {
   transform: translateY(-1px);
   box-shadow: 0 8px 18px rgba(18, 22, 28, 0.08);
